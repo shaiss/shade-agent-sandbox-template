@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { requestSignature } from "@neardefi/shade-agent-js";
+import { requestSignature } from "../utils/nonceManager";
 import {
   ethContractAbi,
   ethContractAddress,
@@ -7,6 +7,7 @@ import {
   Evm,
 } from "../utils/ethereum";
 import { getEthereumPriceUSD } from "../utils/fetch-eth-price";
+import { getNextEthereumNonce } from "../utils/ethereumNonceManager";
 import { Contract, JsonRpcProvider } from "ethers";
 import { utils } from "chainsig.js";
 const { toRSV, uint8ArrayToHex } = utils.cryptography;
@@ -40,6 +41,15 @@ app.get("/", async (c) => {
     });
     console.log("signRes", signRes);
 
+    // Check if there was an error in the signature response
+    if ('error' in signRes) {
+      console.error("Signature request failed:", signRes.error);
+      return c.json({ 
+        error: "Signature request failed", 
+        details: signRes.error 
+      }, 500);
+    }
+
     // Reconstruct the signed transaction
     const signedTransaction = Evm.finalizeTransactionSigning({
       transaction,
@@ -66,17 +76,23 @@ async function getPricePayload(ethPrice: number, contractId: string) {
     contractId,
     "ethereum-1",
   );
+  
+  // Get the next nonce for this address
+  const nonce = await getNextEthereumNonce(senderAddress);
+  
   // Create a new JSON-RPC provider for the Ethereum network
   const provider = new JsonRpcProvider(ethRpcUrl);
   // Create a new contract interface for the Ethereum Oracle contract
   const contract = new Contract(ethContractAddress, ethContractAbi, provider);
   // Encode the function data for the updatePrice function
   const data = contract.interface.encodeFunctionData("updatePrice", [ethPrice]);
-  // Prepare the transaction for signing 
+  
+  // Prepare the transaction for signing with explicit nonce
   const { transaction, hashesToSign } = await Evm.prepareTransactionForSigning({
     from: senderAddress,
     to: ethContractAddress,
     data,
+    nonce,
   });
 
   return { transaction, hashesToSign };

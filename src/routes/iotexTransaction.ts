@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { requestSignature } from "@neardefi/shade-agent-js";
+import { requestSignature } from "../utils/nonceManager";
 import {
   iotexContractAddress,
   iotexRpcUrl,
@@ -82,6 +82,15 @@ app.get("/", async (c) => {
       payload: uint8ArrayToHex(hashesToSign[0]),
     });
     console.log("signRes", signRes);
+
+    // Check if there was an error in the signature response
+    if ('error' in signRes) {
+      console.error("Signature request failed:", signRes.error);
+      return c.json({ 
+        error: "Signature request failed", 
+        details: signRes.error 
+      }, 500);
+    }
 
     // Create signed transaction manually for IoTeX
     console.log("🔧 Serializing signed transaction (ethers)...");

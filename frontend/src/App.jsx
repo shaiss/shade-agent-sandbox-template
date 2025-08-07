@@ -3,17 +3,19 @@ import "../styles/globals.css";
 import { getContractPrice, formatBalance } from "./ethereum";
 import Overlay from "./Overlay";
 import { API_URL } from "./config";
-import { NETWORKS, DEFAULT_NETWORK } from "./networks";
+import MultiChainDemo from "./MultiChainDemo";
+import SingleChainDemo from "./SingleChainDemo";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export default function Home() {
   const [message, setMessage] = useState("");
-  const [selectedNetwork, setSelectedNetwork] = useState(DEFAULT_NETWORK);
   const [agentAddress, setAgentAddress] = useState();
   const [agentBalance, setAgentBalance] = useState("0");
-  const [networkAddress, setNetworkAddress] = useState("");
-  const [networkBalance, setNetworkBalance] = useState("0");
+  const [ethereumAddress, setEthereumAddress] = useState("");
+  const [ethereumBalance, setEthereumBalance] = useState("0");
+  const [iotexAddress, setIotexAddress] = useState("");
+  const [iotexBalance, setIotexBalance] = useState("0");
   const [contractPrice, setContractPrice] = useState(null);
   const [lastTxHash, setLastTxHash] = useState(null);
   const [lastTxDetails, setLastTxDetails] = useState(null);
@@ -25,13 +27,18 @@ export default function Home() {
     setMessage("");
   };
 
-  // Get the current price from the value in the contract
+  // Get the current price from the value in the contract (check both chains)
   const getPrice = async () => {
     try {
-      const price = await getContractPrice(selectedNetwork);
+      // Try Ethereum first, then IoTeX
+      let price = await getContractPrice('sepolia');
+      if (price === null || price === 0 || price === "0") {
+        price = await getContractPrice('iotex');
+      }
+      
       if (price === null || price === 0 || price === "0") {
         setContractPrice(null);
-        console.log(`No price set yet in ${selectedNetwork} contract`);
+        console.log("No price set yet in any contract");
       } else {
         const displayPrice = (parseInt(price.toString()) / 100).toFixed(2);
         setContractPrice(displayPrice);
@@ -57,72 +64,50 @@ export default function Home() {
     }
   };
 
-  // Call the API to get the network account details
-  const getNetworkAccount = async () => {
+  // Call the API to get both network account details
+  const getNetworkAccounts = async () => {
     try {
-      const network = NETWORKS[selectedNetwork];
-      const res = await fetch(`${API_URL}${network.apiEndpoints.account}`).then((r) =>
-        r.json(),
-      );
-      setNetworkAddress(res.senderAddress);
-      const decimals = selectedNetwork === 'iotex' ? 18 : 18; // Both use 18 decimals
-      const formattedBalance = formatBalance(res.balance, decimals);
-      setNetworkBalance(formattedBalance);
+      // Get Ethereum account
+      const ethRes = await fetch(`${API_URL}/api/eth-account`).then((r) => r.json());
+      setEthereumAddress(ethRes.senderAddress);
+      const ethFormattedBalance = formatBalance(ethRes.balance, 18);
+      setEthereumBalance(ethFormattedBalance);
+
+      // Get IoTeX account
+      const iotexRes = await fetch(`${API_URL}/api/iotex-account`).then((r) => r.json());
+      setIotexAddress(iotexRes.senderAddress);
+      const iotexFormattedBalance = formatBalance(iotexRes.balance, 18);
+      setIotexBalance(iotexFormattedBalance);
     } catch (error) {
       console.log("Error fetching network account info:", error);
       setError("Failed to fetch network account details");
     }
   };
 
-  // Call the API to set the price in the contract
-  const setPrice = async () => {
-    try {
-      const network = NETWORKS[selectedNetwork];
-      const res = await fetch(`${API_URL}${network.apiEndpoints.transaction}`).then((r) =>
-        r.json(),
-      );
-      
-      if (res.error) {
-        throw new Error(res.error);
-      }
-      
-      setContractPrice(res.newPrice);
-      setLastTxHash(res.txHash);
-      setLastTxDetails({
-        ...res,
-        network: selectedNetwork,
-        explorerUrl: `${NETWORKS[selectedNetwork].explorerUrl}/tx/${res.txHash}`,
-        timestamp: new Date().toLocaleString()
-      });
-      
-      const successMsg = `✅ Transaction successful!\n💰 New price: $${res.newPrice}\n🔗 Hash: ${res.txHash?.substring(0, 10)}...`;
-      setMessageHide(successMsg, 5000, true);
-    } catch (error) {
-      setMessageHide(
-        "Failed to set price. Check that both accounts are funded.",
-        3000,
-        false,
-      );
-      console.log("Error setting price:", error);
-      setError("Failed to set price: " + (error.message || "Unknown error"));
-    }
+  // Handle single chain transaction success
+  const handleSingleChainSuccess = (data) => {
+    setContractPrice(data.newPrice);
+    setLastTxHash(data.txHash);
+    setLastTxDetails({
+      ...data,
+      network: data.chain,
+      explorerUrl: data.chain === 'ethereum' 
+        ? `https://sepolia.etherscan.io/tx/${data.txHash}`
+        : `https://testnet.iotexscan.io/tx/${data.txHash}`,
+      timestamp: new Date().toLocaleString()
+    });
+    
+    const chainName = data.chain === 'ethereum' ? 'Ethereum Sepolia' : 'IoTeX Testnet';
+    const successMsg = `✅ ${chainName} transaction successful!\n💰 New price: $${data.newPrice}\n🔗 Hash: ${data.txHash?.substring(0, 10)}...`;
+    setMessageHide(successMsg, 5000, true);
   };
 
   // Set up the initial state
   useEffect(() => {
     getAgentAccount();
-    getNetworkAccount();
+    getNetworkAccounts();
     getPrice();
-  }, [selectedNetwork]);
-
-  // Network change handler
-  const handleNetworkChange = (networkId) => {
-    setSelectedNetwork(networkId);
-    setContractPrice(null);
-    setLastTxHash(null);
-    setLastTxDetails(null);
-    setError("");
-  };
+  }, []);
 
   return (
     <div className="container">
@@ -137,29 +122,53 @@ export default function Home() {
           <h2 className="subtitle">Powered by Shade Agents</h2>
         </div>
         
-        {/* Network Selector */}
-        <div className="network-selector">
-          <label htmlFor="network-select">Select Network: </label>
-          <select 
-            id="network-select"
-            value={selectedNetwork} 
-            onChange={(e) => handleNetworkChange(e.target.value)}
-            className="network-dropdown"
-          >
-            {Object.entries(NETWORKS).map(([id, network]) => (
-              <option key={id} value={id}>{network.name}</option>
-            ))}
-          </select>
+        {/* Individual Chain Signing */}
+        <div className="single-chain-section">
+          <h3>🔐 Single Chain Signing</h3>
+          <p>Demonstrate cross-chain signatures on individual chains:</p>
+          
+          <div className="single-chain-grid">
+            <SingleChainDemo
+              chainName="Ethereum (Sepolia)"
+              chainId="ethereum"
+              API_URL={API_URL}
+              onSuccess={handleSingleChainSuccess}
+            />
+            <SingleChainDemo
+              chainName="IoTeX (Testnet)"
+              chainId="iotex"
+              API_URL={API_URL}
+              onSuccess={handleSingleChainSuccess}
+            />
+          </div>
+        </div>
+
+        {/* Multi-Chain Demo - The Star of the Show! */}
+        <div className="multi-chain-section">
+          <h3>🚀 Multi-Chain Magic</h3>
+          <p>Sign on both chains simultaneously with one click:</p>
+          <MultiChainDemo 
+            API_URL={API_URL} 
+            onSuccess={(data) => {
+              // Update price displays for both networks
+              getPrice();
+              getNetworkAccounts();
+              // Show celebration message
+              setMessageHide(`🎉 Multi-chain update complete! Both chains updated in ${data.totalTime} seconds!`, 5000, true);
+            }}
+          />
         </div>
 
         <p>
-          This is a simple example of a Verifiable Price Oracle for {NETWORKS[selectedNetwork].name} 
-          smart contracts using Shade Agents.
+          This is a simple example of a Verifiable Price Oracle that demonstrates cross-chain transactions 
+          using Shade Agents. The oracle fetches the current ETH price from Coinbase and OKX, averages them, 
+          and stores the result in smart contracts on multiple blockchains.
         </p>
         <ol>
           <li>Keep the agent account funded with testnet NEAR tokens</li>
-          <li>Fund the {NETWORKS[selectedNetwork].name} account (0.001 {NETWORKS[selectedNetwork].currency} will do)</li>
-          <li>Send the ETH price to the {NETWORKS[selectedNetwork].name} contract</li>
+          <li>Fund the Ethereum (Sepolia) account (0.001 ETH will do)</li>
+          <li>Fund the IoTeX (Testnet) account (0.001 IOTX will do)</li>
+          <li>Send the ETH price to the contracts on either or both chains</li>
         </ol>
 
         {/* Display the current price in the contract */}
@@ -169,10 +178,7 @@ export default function Home() {
             <p className="contract-price-value">${contractPrice}</p>
           ) : (
             <p className="contract-price-placeholder">
-              {selectedNetwork === 'iotex' ? 
-                'No price set yet in IoTeX contract' : 
-                'No price set yet in Sepolia contract'
-              }
+              No price set yet in any contract
             </p>
           )}
         </div>
@@ -188,7 +194,11 @@ export default function Home() {
               </div>
               <div className="transaction-row">
                 <span className="transaction-label">🌐 Network:</span>
-                <span className="transaction-value">{NETWORKS[lastTxDetails.network].name}</span>
+                <span className="transaction-value">
+                  {lastTxDetails.network === 'ethereum' ? 'Ethereum (Sepolia)' : 
+                   lastTxDetails.network === 'iotex' ? 'IoTeX (Testnet)' : 
+                   lastTxDetails.network}
+                </span>
               </div>
               <div className="transaction-row">
                 <span className="transaction-label">🔗 Transaction:</span>
@@ -212,7 +222,7 @@ export default function Home() {
                 rel="noopener noreferrer"
                 className="transaction-link"
               >
-                🔍 View on {selectedNetwork === 'sepolia' ? 'Etherscan' : 'IoTeXScan'}
+                🔍 View on {lastTxDetails.network === 'ethereum' ? 'Etherscan' : 'IoTeXScan'}
               </a>
               <button
                 className="copy-hash-btn"
@@ -288,16 +298,16 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Display the network account details */}
+          {/* Display the Ethereum account details */}
           <div className="card">
-            <h3>Fund {NETWORKS[selectedNetwork].name} Account</h3>
+            <h3>Fund Ethereum (Sepolia) Account</h3>
             <div>
               <br />
-              {networkAddress ? (
+              {ethereumAddress ? (
                 <>
                   <p>
-                    {networkAddress.substring(0, 10)}...
-                    {networkAddress.substring(networkAddress.length - 4)}
+                    {ethereumAddress.substring(0, 10)}...
+                    {ethereumAddress.substring(ethereumAddress.length - 4)}
                     <br />
                     <button
                       className="btn"
@@ -307,7 +317,7 @@ export default function Home() {
                             navigator.clipboard &&
                             navigator.clipboard.writeText
                           ) {
-                            navigator.clipboard.writeText(networkAddress);
+                            navigator.clipboard.writeText(ethereumAddress);
                             setMessageHide("Copied", 500, true);
                           } else {
                             setMessageHide("Clipboard not supported", 3000, true);
@@ -321,15 +331,15 @@ export default function Home() {
                     </button>
                     <br />
                     <br />
-                    Balance: {networkBalance ? networkBalance : "0"} {NETWORKS[selectedNetwork].currency}
+                    Balance: {ethereumBalance ? ethereumBalance : "0"} ETH
                     <br />
                     <a
-                      href={NETWORKS[selectedNetwork].faucetUrl}
+                      href="https://sepoliafaucet.com/"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="faucet-link"
                     >
-                      Get {NETWORKS[selectedNetwork].name} {NETWORKS[selectedNetwork].currency} from faucet →
+                      Get Sepolia ETH from faucet →
                     </a>
                   </p>
                 </>
@@ -339,23 +349,58 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Display the button to set the price in the contract */}
-          <a
-            href="#"
-            className="card"
-            onClick={async () => {
-              setMessage({
-                text: `Querying and sending the ETH price to the ${NETWORKS[selectedNetwork].name} contract...`,
-                success: false,
-              });
-              await setPrice();
-            }}
-          >
-            <h3>Set ETH Price</h3>
-            <p className="code">
-              Click to set the ETH price in the {NETWORKS[selectedNetwork].name} smart contract
-            </p>
-          </a>
+          {/* Display the IoTeX account details */}
+          <div className="card">
+            <h3>Fund IoTeX (Testnet) Account</h3>
+            <div>
+              <br />
+              {iotexAddress ? (
+                <>
+                  <p>
+                    {iotexAddress.substring(0, 10)}...
+                    {iotexAddress.substring(iotexAddress.length - 4)}
+                    <br />
+                    <button
+                      className="btn"
+                      onClick={() => {
+                        try {
+                          if (
+                            navigator.clipboard &&
+                            navigator.clipboard.writeText
+                          ) {
+                            navigator.clipboard.writeText(iotexAddress);
+                            setMessageHide("Copied", 500, true);
+                          } else {
+                            setMessageHide("Clipboard not supported", 3000, true);
+                          }
+                        } catch (e) {
+                          setMessageHide("Copy failed", 3000, true);
+                        }
+                      }}
+                    >
+                      copy
+                    </button>
+                    <br />
+                    <br />
+                    Balance: {iotexBalance ? iotexBalance : "0"} IOTX
+                    <br />
+                    <a
+                      href="https://faucet.iotex.io/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="faucet-link"
+                    >
+                      Get IoTeX IOTX from faucet →
+                    </a>
+                  </p>
+                </>
+              ) : (
+                <p>Loading...</p>
+              )}
+            </div>
+          </div>
+
+
         </div>
       </main>
 
