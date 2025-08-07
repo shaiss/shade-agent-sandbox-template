@@ -6,7 +6,7 @@ export const iotexRpcUrl = "https://babel-api.testnet.iotex.io"; // Testnet
 export const iotexMainnetRpcUrl = "https://babel-api.mainnet.iotex.io"; // Mainnet
 
 // IoTeX contract addresses (deployed)
-export const iotexContractAddress = "0xf3F4cb1D1775ab62c8f1CAAe3a5EE369D89DF910"; // Deployed for ac.proxy.proudbear01.testnet
+export const iotexContractAddress = "0xd0E0ea5F7542B12164Dc213d63bC149eC6cD68d5"; // Deployed with NEAR-derived owner
 export const iotexMainnetContractAddress = "0x..."; // Deploy contract here for mainnet
 
 export const iotexContractAbi = [
@@ -52,8 +52,10 @@ const iotexPublicClient = createPublicClient({
 // Create a wrapper class that overrides gas estimation
 class IoTeXAdapter {
   private evmAdapter: any;
+  private publicClient: any;
 
   constructor(publicClient: any, contract: any) {
+    this.publicClient = publicClient;
     this.evmAdapter = new chainAdapters.evm.EVM({
       publicClient,
       contract,
@@ -71,49 +73,45 @@ class IoTeXAdapter {
 
   // Custom prepareTransactionForSigning with fixed gas
   async prepareTransactionForSigning(params: any) {
-    console.log("🔧 Using fixed gas for IoTeX to bypass estimation bug");
+    console.log("🔧 Preparing IoTeX tx manually with fixed gas");
     
-    // Override gas settings
-    const modifiedParams = {
-      ...params,
-      gas: 150000, // Fixed gas limit - enough for contract calls
+    // Get nonce and gas price
+    const nonce = await this.publicClient.getTransactionCount({
+      address: params.from,
+    });
+    const gasPrice = await this.publicClient.getGasPrice();
+    
+    // Build transaction object
+    const transaction = {
+      to: params.to,
+      value: params.value || 0n,
+      data: params.data,
+      gas: params.gas || 150000n,
+      gasPrice: gasPrice,
+      nonce: Number(nonce),
+      chainId: 4690, // IoTeX testnet
     };
     
-    try {
-      // Try normal preparation first
-      return await this.evmAdapter.prepareTransactionForSigning(modifiedParams);
-    } catch (error: any) {
-      if (error.message.includes("Only owner can call this function")) {
-        console.log("⚠️  Gas estimation failed, building transaction manually");
-        
-        // Build transaction manually with fixed values
-        const nonce = await this.evmAdapter.publicClient.getTransactionCount({
-          address: params.from,
-        });
-        
-        const gasPrice = await this.evmAdapter.publicClient.getGasPrice();
-        
-        // Create a basic transaction object
-        const transaction = {
-          to: params.to,
-          value: params.value || 0n,
-          data: params.data,
-          gas: 150000,
-          gasPrice: gasPrice,
-          nonce: nonce,
-          chainId: 4690, // IoTeX testnet
-        };
-        
-        // Use the EVM adapter's serializeTransaction method
-        const serialized = await this.evmAdapter.serializeTransaction(transaction);
-        
-        return {
-          transaction,
-          hashesToSign: [serialized],
-        };
-      }
-      throw error;
-    }
+    // Create hash for signing
+    const { ethers } = await import("ethers");
+    const unsignedTx = {
+      to: transaction.to,
+      value: transaction.value,
+      data: transaction.data,
+      gasLimit: transaction.gas,
+      gasPrice: transaction.gasPrice,
+      nonce: transaction.nonce,
+      chainId: transaction.chainId,
+      type: 0,
+    };
+    
+    const ethersTx = ethers.Transaction.from(unsignedTx);
+    const hashToSign = ethers.getBytes(ethersTx.unsignedHash);
+    
+    return {
+      transaction,
+      hashesToSign: [hashToSign],
+    };
   }
 
   // Delegate other methods
@@ -141,14 +139,14 @@ export const iotexChainConfig = {
   testnet: {
     rpcUrl: iotexRpcUrl,
     contractAddress: iotexContractAddress,
-    path: "iotex-1",
+    path: "ethereum-1", // Use ethereum-1 since IoTeX is EVM-compatible and iotex-1 path may not be configured
     chainId: 4690,
     adapter: IoTeX,
   },
   mainnet: {
     rpcUrl: iotexMainnetRpcUrl,
     contractAddress: iotexMainnetContractAddress,
-    path: "iotex-mainnet",
+    path: "ethereum-1", // Use ethereum-1 since IoTeX is EVM-compatible
     chainId: 4689,
     adapter: IoTeXMainnet,
   },

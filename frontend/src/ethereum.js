@@ -1,7 +1,5 @@
 import { Contract, JsonRpcProvider } from "ethers";
-
-export const ethRpcUrl = "https://sepolia.drpc.org";
-export const ethContractAddress = "0xb8d9b079F1604e9016137511464A1Fe97F8e2Bd8";
+import { NETWORKS } from "./networks";
 
 export const ethContractAbi = [
   {
@@ -32,12 +30,25 @@ export const ethContractAbi = [
   },
 ];
 
-const provider = new JsonRpcProvider(ethRpcUrl);
-const contract = new Contract(ethContractAddress, ethContractAbi, provider);
+// Function to get provider and contract for a specific network
+function getNetworkContract(networkId) {
+  const network = NETWORKS[networkId];
+  const provider = new JsonRpcProvider(network.rpcUrl);
+  const contract = new Contract(network.contractAddress, ethContractAbi, provider);
+  return { provider, contract };
+}
 
-// Function to get the price from the Ethereum contract
-export async function getContractPrice() {
-  return await contract.getPrice();
+// Function to get the price from the contract (network-agnostic)
+export async function getContractPrice(networkId = 'sepolia') {
+  try {
+    const { contract } = getNetworkContract(networkId);
+    const price = await contract.getPrice();
+    return price;
+  } catch (error) {
+    console.log(`Failed to get price from ${networkId} contract:`, error.message);
+    // Return null or 0 to indicate no price is set yet
+    return null;
+  }
 }
 
 // Function to format account balances

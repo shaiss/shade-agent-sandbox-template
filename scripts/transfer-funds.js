@@ -1,19 +1,19 @@
 const hre = require("hardhat");
 
 async function main() {
-  console.log("💸 Transferring IOTX to proudbear01.testnet derived address");
+  console.log("💸 Transferring IOTX to target address");
   console.log("========================================================");
   
-  const fromAddress = "0x8D45053985C684D4AD9982e04Bc668AD6F83b2B6"; // Original funded wallet
-  const toAddress = "0x3a9847f0375e7372a1D7420E7B9B74F490Ae198a";   // proudbear01.testnet derived
+  const fromAddress = "0x8D45053985C684D4AD9982e04Bc668AD6F83b2B6"; // Secondary faucet wallet
+  const toAddress = "0x26fb1564B30c876009578C5A4058310970963a94";   // Target address
   const transferAmount = hre.ethers.parseEther("1.0"); // Transfer 1 IOTX (plenty for gas fees)
   
   // Create wallet from private key
   const wallet = new hre.ethers.Wallet(process.env.PRIVATE_KEY, hre.ethers.provider);
   
   console.log("📋 Transfer Details:");
-  console.log("  From (Original Wallet):", fromAddress);
-  console.log("  To (proudbear01.testnet):", toAddress);
+  console.log("  From (Secondary Faucet):", fromAddress);
+  console.log("  To (Target Address):", toAddress);
   console.log("  Amount:", hre.ethers.formatEther(transferAmount), "IOTX");
   console.log("  Network:", hre.network.name);
   
@@ -81,7 +81,7 @@ async function main() {
   console.log("Explorer:", `https://testnet.iotexscan.io/tx/${tx.hash}`);
   
   console.log("\n🎉 Transfer completed successfully!");
-  console.log("The proudbear01.testnet derived address now has IOTX for gas fees");
+  console.log("The target address now has IOTX for gas fees");
   console.log("Ready to test the Shade Agent IoTeX integration!");
 }
 
