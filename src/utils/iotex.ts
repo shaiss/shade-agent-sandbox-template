@@ -5,9 +5,9 @@ import { createPublicClient, http } from "viem";
 export const iotexRpcUrl = "https://babel-api.testnet.iotex.io"; // Testnet
 export const iotexMainnetRpcUrl = "https://babel-api.mainnet.iotex.io"; // Mainnet
 
-// IoTeX contract addresses (deploy and update these)
-export const iotexContractAddress = "0x..."; // Deploy contract here
-export const iotexMainnetContractAddress = "0x..."; // Deploy contract here
+// IoTeX contract addresses (deployed)
+export const iotexContractAddress = "0xFCebaa43749be59b745C6078D985AcD6930d0b5D"; // Deployed on testnet
+export const iotexMainnetContractAddress = "0x..."; // Deploy contract here for mainnet
 
 export const iotexContractAbi = [
   {
@@ -76,7 +76,7 @@ export const iotexChainConfig = {
   },
   mainnet: {
     rpcUrl: iotexMainnetRpcUrl,
-    contractAddress: iotexContractAddress, // Different contract address for mainnet
+    contractAddress: iotexMainnetContractAddress, // Different contract address for mainnet
     path: "iotex-mainnet",
     chainId: 4689,
     adapter: IoTeXMainnet,
