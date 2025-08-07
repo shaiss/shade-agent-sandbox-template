@@ -6,7 +6,7 @@ export const iotexRpcUrl = "https://babel-api.testnet.iotex.io"; // Testnet
 export const iotexMainnetRpcUrl = "https://babel-api.mainnet.iotex.io"; // Mainnet
 
 // IoTeX contract addresses (deployed)
-export const iotexContractAddress = "0xFCebaa43749be59b745C6078D985AcD6930d0b5D"; // Deployed on testnet
+export const iotexContractAddress = "0x9A950B7381282EAfaa81e5810727504e59B19fAd"; // Deployed for proudbear01.testnet
 export const iotexMainnetContractAddress = "0x..."; // Deploy contract here for mainnet
 
 export const iotexContractAbi = [
