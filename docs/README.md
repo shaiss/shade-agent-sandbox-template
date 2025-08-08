@@ -90,6 +90,9 @@ The guides include:
 - Step-by-step flow visualizations
 - Before/after scenario illustrations
 
+### 7. 🧩 Adding a New Chain
+- See the canonical developer guide: [Adding New Chains](./ADDING_NEW_CHAINS.md)
+
 ## 🛠️ Technical Enhancements
 
 Quick wins from the enhancement guide:
