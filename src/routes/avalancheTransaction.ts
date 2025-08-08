@@ -4,6 +4,7 @@ import { getAvalancheAdapter, getAvalanchePath, avalancheChainConfig, avalancheC
 import { getEthereumPriceUSD } from "../utils/fetch-eth-price";
 import { Contract, JsonRpcProvider } from "ethers";
 import { utils } from "chainsig.js";
+import { logInfo, logError } from "../utils/logStream";
 const { toRSV, uint8ArrayToHex } = utils.cryptography;
 
 const app = new Hono();
@@ -15,13 +16,43 @@ app.get("/", async (c) => {
 
     const ethPrice = await getEthereumPriceUSD();
     if (!ethPrice) return c.json({ error: "Failed to fetch ETH price" }, 500);
+    logInfo(`🧮 ETH price (cents): ${ethPrice}`);
 
     const adapter = getAvalancheAdapter('testnet');
     const path = getAvalanchePath('testnet');
+    const debug = c.req.query("debug") === "1";
+
     const { transaction, hashesToSign } = await getPricePayload(ethPrice, contractId, adapter, path);
+    logInfo("🔧 Prepared Avalanche tx for signing (1 hash)");
+
+    if (debug) {
+      const t: any = transaction as any;
+      return c.json({
+        debug: true,
+        tx: {
+          to: t?.to,
+          value: t?.value != null ? String(t.value) : null,
+          data: t?.data?.slice?.(0, 20) + "...",
+          gas: t?.gas != null ? String(t.gas) : null,
+          gasPrice: t?.gasPrice != null ? String(t.gasPrice) : null,
+          nonce: t?.nonce,
+          chainId: t?.chainId,
+        },
+        types: {
+          value: typeof t?.value,
+          gas: typeof t?.gas,
+          gasPrice: typeof t?.gasPrice,
+          nonce: typeof t?.nonce,
+          chainId: typeof t?.chainId,
+        }
+      });
+    }
 
     const signRes = await requestSignature({ path, payload: uint8ArrayToHex(hashesToSign[0]) });
-    if ('error' in signRes) return c.json({ error: 'Signature request failed', details: signRes.error }, 500);
+    if ('error' in signRes) {
+      logError(`Signature request failed: ${String(signRes.error)}`);
+      return c.json({ error: 'Signature request failed', details: signRes.error }, 500);
+    }
 
     const signedTransaction = adapter.finalizeTransactionSigning({
       transaction,
@@ -29,9 +60,12 @@ app.get("/", async (c) => {
     });
 
     const txHash = await adapter.broadcastTx(signedTransaction);
+    logInfo(`📡 Broadcasted Avalanche tx: ${txHash.hash}`);
     return c.json({ txHash: txHash.hash, newPrice: (ethPrice / 100).toFixed(2) });
   } catch (error) {
-    return c.json({ error: "Failed to send Avalanche transaction" }, 500);
+    const message = error instanceof Error ? error.message : String(error);
+    logError(`Failed to send Avalanche transaction: ${message}`);
+    return c.json({ error: "Failed to send Avalanche transaction", details: message }, 500);
   }
 });
 
