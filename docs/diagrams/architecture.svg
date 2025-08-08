@@ -1,0 +1,7 @@
+Error 400: SyntaxError: Parse error on line 2:
+...APP[Hono API Server (Node)]  subgraph A
+-----------------------^
+Expecting 'SQE', 'DOUBLECIRCLEEND', 'PE', '-)', 'STADIUMEND', 'SUBROUTINEEND', 'PIPE', 'CYLINDEREND', 'DIAMOND_STOP', 'TAGEND', 'TRAPEND', 'INVTRAPEND', 'UNICODE_TEXT', 'TEXT', 'TAGSTART', got 'PS'
+Error: Syntax error in graph
+    at Worker.convert (file:///usr/local/kroki/src/worker.js:44:15)
+    at async file:///usr/local/kroki/src/index.js:31:28

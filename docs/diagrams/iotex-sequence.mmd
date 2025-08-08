@@ -1,0 +1,17 @@
+sequenceDiagram
+  participant FE as Frontend
+  participant API as /api/iotex-transaction
+  participant Price as fetch-eth-price
+  participant IOTEX as IoTeX adapter
+  participant MPC as Shade Agent (NEAR MPC)
+  participant IORPC as IoTeX RPC
+
+  FE->>API: GET /api/iotex-transaction
+  API->>Price: Get ETH price
+  API->>IOTEX: deriveAddress(contractId, path)
+  API->>IOTEX: prepareTransactionForSigning(updatePrice, fixedGas)
+  API->>MPC: requestSignature(hash)
+  MPC-->>API: signature
+  API->>IORPC: sendRawTransaction(serialized)
+  IORPC-->>API: txHash
+  API-->>FE: { txHash, newPrice }

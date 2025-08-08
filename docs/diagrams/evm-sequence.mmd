@@ -1,0 +1,20 @@
+sequenceDiagram
+  participant FE as Frontend
+  participant API as /api/transaction
+  participant Price as fetch-eth-price
+  participant EVM as Ethereum adapter
+  participant EN as EthereumNonceMgr
+  participant MPC as Shade Agent (NEAR MPC)
+  participant ETH as Sepolia RPC
+
+  FE->>API: GET /api/transaction
+  API->>Price: Get ETH price (OKX+Coinbase)
+  API->>EVM: deriveAddress(contractId,"ethereum-1")
+  API->>EN: getNextEthereumNonce(address)
+  API->>EVM: prepareTransactionForSigning(updatePrice(price), nonce)
+  API->>MPC: requestSignature(hash)
+  MPC-->>API: signature
+  API->>EVM: finalizeTransactionSigning(signature)
+  API->>ETH: broadcastTx(signedTx)
+  ETH-->>API: txHash
+  API-->>FE: { txHash, newPrice }

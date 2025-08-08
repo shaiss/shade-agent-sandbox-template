@@ -1,0 +1,43 @@
+graph TD
+  U[User / Frontend] -->|HTTP| APP[Hono API Server (Node)]
+  subgraph API Routes
+    APP --> RA[/agent-account/]
+    APP --> RE[/eth-account/]
+    APP --> RT[/transaction/]
+    APP --> RI[/iotex-account/]
+    APP --> RIT[/iotex-transaction/]
+    APP --> RS[/solana-account/]
+    APP --> RST[/solana-transaction/]
+    APP --> RP[/price/]
+    APP --> LS[/logs/stream (SSE)/]
+  end
+
+  RT --> P[getEthereumPriceUSD]
+  RIT --> P
+  RST --> P
+
+  subgraph Utils
+    P --> OKX[OKX API]
+    P --> CB[Coinbase API]
+
+    RT --> EVM[Ethereum adapter]
+    RIT --> IOTEX[IoTeX adapter]
+    RST --> SOL[Solana adapter]
+
+    RT --> EN[getNextEthereumNonce]
+    APP --> LOG[logStream (SSE)]
+    RT --> NM[nonceManager (NEAR nonce control)]
+    RIT --> NM
+    RST --> NM
+  end
+
+  subgraph MPC via Shade Agent
+    NM --> SA[@neardefi/shade-agent-js]
+  end
+
+  EVM --> ETH[Sepolia RPC]
+  IOTEX --> IORPC[IoTeX RPC]
+  SOL --> SOLRPC[Solana RPC]
+
+  RT --> ETHC[PriceOracle.sol]
+  RIT --> IOTXC[PriceOracle.sol]
