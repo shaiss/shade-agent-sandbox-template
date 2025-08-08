@@ -23,6 +23,7 @@ Make your demo pop with:
 - Visual animations and effects
 - Sound effects and celebrations
 - Before/after comparisons
+- Quick implementation scripts
 
 ### 3. 📋 [Presenter Quick Reference](./PRESENTER_QUICK_REFERENCE.md)
 Your pocket companion with:

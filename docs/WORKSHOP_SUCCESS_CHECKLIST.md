@@ -16,6 +16,7 @@ Transform a "lackluster" cross-chain transaction demo into an exciting journey t
 - Visual animations and effects
 - Comparison dashboards
 - Quick implementation scripts
+- Complete demo upgrade instructions
 
 ### 3. **Quick Reference** (`PRESENTER_QUICK_REFERENCE.md`)
 - 30-second elevator pitch
