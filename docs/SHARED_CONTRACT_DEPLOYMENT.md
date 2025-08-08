@@ -118,7 +118,7 @@ export const iotexMainnetContractAddress = getContractAddress('iotex', 'mainnet'
 
 ### 1. Deploy IoTeX Contracts (One-time)
 ```bash
-# Follow deploy-iotex-contract.md
+# Follow the contract deployment section in docs/ADDING_NEW_CHAINS.md
 # Deploy to both testnet and mainnet
 # Record contract addresses
 ```
