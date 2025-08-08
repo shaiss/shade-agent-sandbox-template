@@ -3,7 +3,6 @@ import "../styles/globals.css";
 import { getContractPrice, getAllContractPrices, getLastUpdateInfo, getTimestampFromTxHash, formatBalance } from "./ethereum";
 import Overlay from "./Overlay";
 import { API_URL } from "./config";
-import MultiChainDemo from "./MultiChainDemo";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -29,6 +28,12 @@ export default function Home() {
   const [lastUpdateInfo, setLastUpdateInfo] = useState({ sepolia: null, iotex: null });
   const [error, setError] = useState("");
   const [isSigning, setIsSigning] = useState({ ethereum: false, iotex: false });
+  const [selectedChains, setSelectedChains] = useState([]); // ['ethereum','iotex']
+  const [isBatchExecuting, setIsBatchExecuting] = useState(false);
+  const [nonceIncrementEnabled, setNonceIncrementEnabled] = useState(true);
+  const [nerdLog, setNerdLog] = useState([]);
+  const [nerdPanelOpen, setNerdPanelOpen] = useState(false);
+  const [hidePriceLogs, setHidePriceLogs] = useState(true);
 
   const setMessageHide = async (message, dur = 3000, success = false) => {
     setMessage({ text: message, success });
@@ -98,6 +103,35 @@ export default function Home() {
     } catch (error) { setError("Failed to get agent account details"); }
   };
 
+  // Nonce auto-increment status helpers
+  const fetchNonceStatus = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/nonce-control/status`).then(r => r.json());
+      if (typeof res?.nonceIncrementEnabled === 'boolean') setNonceIncrementEnabled(res.nonceIncrementEnabled);
+    } catch (e) {}
+  };
+
+  const toggleNonceIncrement = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/nonce-control/toggle`, { method: 'POST' }).then(r => r.json());
+      const enabled = !!res?.nonceIncrementEnabled;
+      setNonceIncrementEnabled(enabled);
+      if (!enabled) {
+        setMessageHide(
+          "⚠️ Auto nonce increment disabled. With nonce increment disabled, you'll see how NEAR protects against replay attacks. The second transaction may fail with a nonce error - this is a security feature!\n\nTry it: Click the button and watch one transaction succeed while the other shows a nonce conflict. This demonstrates NEAR's MPC bridge security.",
+          6000,
+          false
+        );
+      }
+    } catch (e) {}
+  };
+
+  const toggleChainSelected = (chain) => {
+    setSelectedChains((prev) =>
+      prev.includes(chain) ? prev.filter((c) => c !== chain) : [...prev, chain]
+    );
+  };
+
   const getNetworkAccounts = async () => {
     try {
       const ethRes = await fetch(`${API_URL}/api/eth-account`).then((r) => r.json());
@@ -106,6 +140,7 @@ export default function Home() {
       const iotexRes = await fetch(`${API_URL}/api/iotex-account`).then((r) => r.json());
       setIotexAddress(iotexRes.senderAddress);
       setIotexBalance(formatBalance(iotexRes.balance, 18));
+      // Solana UI temporarily disabled
     } catch (error) { setError("Failed to fetch network account details"); }
   };
 
@@ -182,6 +217,7 @@ export default function Home() {
     getNetworkAccounts();
     getMarketPrice();
     getPrice();
+    fetchNonceStatus();
     // Auto-refresh market price every 30 seconds with countdown
     const countdown = setInterval(() => {
       setMarketRefreshIn((prev) => {
@@ -196,8 +232,60 @@ export default function Home() {
     return () => clearInterval(countdown);
   }, []);
 
+  // Live backend log stream for "stats for nerds" panel
+  useEffect(() => {
+    try {
+      const es = new EventSource(`${API_URL}/api/logs/stream`);
+      es.addEventListener('log', (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          setNerdLog((prev) => [...prev.slice(-299), data]);
+        } catch {}
+      });
+      return () => es.close();
+    } catch (e) {}
+  }, []);
+
   const lastLocalEth = (() => { try { return JSON.parse(localStorage.getItem('lastTx.ethereum') || 'null'); } catch { return null; }})();
   const lastLocalIotex = (() => { try { return JSON.parse(localStorage.getItem('lastTx.iotex') || 'null'); } catch { return null; }})();
+
+  const updateSelectedChains = async () => {
+    if (selectedChains.length < 2) return; // require at least 2 as per UX
+    setIsBatchExecuting(true);
+    // mark each selected chain as signing
+    setIsSigning((prev) => selectedChains.reduce((acc, ch) => ({ ...acc, [ch]: true }), { ...prev }));
+    try {
+      const requests = selectedChains.map((ch) =>
+        fetch(ch === 'ethereum' ? `${API_URL}/api/transaction` : `${API_URL}/api/iotex-transaction`).then(async (r) => {
+          const data = await r.json();
+          return r.ok && !data.error ? { chain: ch, data } : { chain: ch, error: data.error || 'Transaction failed' };
+        })
+      );
+      const results = await Promise.allSettled(requests);
+      let successCount = 0;
+      for (const r of results) {
+        if (r.status === 'fulfilled' && !r.value.error) {
+          successCount += 1;
+          const ch = r.value.chain;
+          const d = r.value.data;
+          try { localStorage.setItem(`lastTx.${ch}`, JSON.stringify({ txHash: d.txHash, at: new Date().toISOString() })); } catch {}
+          pollForOnchainUpdate(ch, d.newPrice);
+          await handleSingleChainSuccess({ chain: ch, ...d });
+        } else if (r.status === 'fulfilled') {
+          setMessageHide(`${r.value.chain} error: ${r.value.error}`, 2500, false);
+        }
+      }
+      if (successCount > 0) {
+        setMessageHide(`🎉 Updated ${successCount} chain(s)!`, 3000, true);
+      }
+    } catch (e) {
+      setMessageHide(e?.message || 'Batch update failed', 3000, false);
+    } finally {
+      setIsBatchExecuting(false);
+      setIsSigning((prev) => selectedChains.reduce((acc, ch) => ({ ...acc, [ch]: false }), { ...prev }));
+      // keep selections so user can re-run
+    }
+  };
 
   return (
     <div className="container">
@@ -221,8 +309,17 @@ export default function Home() {
             <p className="refresh-row"><span className="spin" aria-hidden>↻</span> Auto-refresh in {marketRefreshIn}s</p>
           </div>
 
-          <div className="card card-with-action">
-            <h3>🧾 Contract Price — Ethereum (Sepolia)</h3>
+          <div className="card card-with-action selectable">
+            <div className="card-header-row">
+              <h3>🧾 Contract Price — Ethereum (Sepolia)</h3>
+              <label className="select-checkbox" title="Select chain for batch update">
+                <input
+                  type="checkbox"
+                  checked={selectedChains.includes('ethereum')}
+                  onChange={() => toggleChainSelected('ethereum')}
+                />
+              </label>
+            </div>
             <div className="card-body-with-action">
               <div className="card-left">
                 <p style={{fontSize:'2rem', margin:0}}>{perChainPrices.sepolia ? `$${perChainPrices.sepolia}` : '—'}</p>
@@ -252,8 +349,17 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="card card-with-action">
-            <h3>🧾 Contract Price — IoTeX (Testnet)</h3>
+          <div className="card card-with-action selectable">
+            <div className="card-header-row">
+              <h3>🧾 Contract Price — IoTeX (Testnet)</h3>
+              <label className="select-checkbox" title="Select chain for batch update">
+                <input
+                  type="checkbox"
+                  checked={selectedChains.includes('iotex')}
+                  onChange={() => toggleChainSelected('iotex')}
+                />
+              </label>
+            </div>
             <div className="card-body-with-action">
               <div className="card-left">
                 <p style={{fontSize:'2rem', margin:0}}>{perChainPrices.iotex ? `$${perChainPrices.iotex}` : '—'}</p>
@@ -283,6 +389,25 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {/* Floating bulk action when selecting at least two chains */}
+        {selectedChains.length >= 2 && (
+          <div className="bulk-action-popup">
+            <button
+              className={`bulk-action-btn ${isBatchExecuting ? 'executing' : ''}`}
+              onClick={updateSelectedChains}
+              disabled={isBatchExecuting}
+            >
+              {isBatchExecuting ? '🔄 Updating selected chains…' : '🚀 Update selected chains'}
+            </button>
+            <div className="mini-toggle-row">
+              <label className="mini-toggle">
+                <input type="checkbox" checked={nonceIncrementEnabled} onChange={toggleNonceIncrement} />
+                <span>Nonce auto-increment</span>
+              </label>
+            </div>
+          </div>
+        )}
 
         {/* Funding cards */}
         <div className="grid">
@@ -341,21 +466,17 @@ export default function Home() {
               ) : (<p>Loading...</p>)}
             </div>
           </div>
+
+          {null}
         </div>
 
-        {/* Multi-Chain Demo */}
-        <div className="multi-chain-section">
-          <h3>🚀 Multi-Chain Magic</h3>
-          <p>Sign on both chains simultaneously with one click:</p>
-          <MultiChainDemo 
-            API_URL={API_URL} 
-            onSuccess={(data) => {
-              getMarketPrice();
-              getPrice();
-              getNetworkAccounts();
-              setMessageHide(`🎉 Multi-chain update complete! Both chains updated in ${data.totalTime} seconds!`, 5000, true);
-            }}
-          />
+        {/* Multi-Chain demo removed in favor of per-card selection UI */}
+
+        {/* Nerd panel toggle */}
+        <div className="nerd-toggle-bar">
+          <button className="btn" onClick={() => setNerdPanelOpen((v) => !v)}>
+            {nerdPanelOpen ? 'Close stats for nerds' : '📊 Stats for nerds'}
+          </button>
         </div>
 
         {/* Single Chain Demo removed in favor of per-card actions */}
@@ -383,6 +504,34 @@ export default function Home() {
       </footer>
 
       {error && <div className="error-toast">{error}</div>}
+
+      {/* Right-hand stats for nerds panel */}
+      <aside className={`nerd-panel ${nerdPanelOpen ? 'open' : ''}`}>
+        <div className="nerd-panel-header">
+          <span>📡 Stats for nerds</span>
+          <div style={{display:'flex', gap:8, alignItems:'center'}}>
+            <label className="mini-toggle" title="Hide noisy price feed logs">
+              <input type="checkbox" checked={hidePriceLogs} onChange={(e)=>setHidePriceLogs(e.target.checked)} />
+              <span>Hide price updates</span>
+            </label>
+            <button className="btn" onClick={() => setNerdPanelOpen(false)}>close</button>
+          </div>
+        </div>
+        <div className="nerd-log" role="log" aria-live="polite">
+          {nerdLog
+            .filter((row)=>{
+              if (!hidePriceLogs) return true;
+              const m = row?.message || '';
+              return !(m.startsWith('Coinbase ETH Price') || m.startsWith('OKX ETH Price') || m.startsWith('Average ETH Price'));
+            })
+            .map((row, idx) => (
+            <div key={idx} className={`nerd-line ${row.level || 'info'}`}>
+              <span className="nerd-ts">{new Date(row.ts).toLocaleTimeString()}</span>
+              <span className="nerd-msg">{row.message}</span>
+            </div>
+          ))}
+        </div>
+      </aside>
     </div>
   );
 }

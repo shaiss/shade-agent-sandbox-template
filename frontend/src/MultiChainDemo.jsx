@@ -263,6 +263,8 @@ export default function MultiChainDemo({ API_URL, onSuccess }) {
             </div>
           )}
         </div>
+
+        {null}
       </div>
 
       {/* Execute Button */}
@@ -278,14 +280,14 @@ export default function MultiChainDemo({ API_URL, onSuccess }) {
       {results && (
         <div className="results-summary">
           <h3>🎉 Multi-Chain Update Complete!</h3>
-          <div className="results-stats">
+            <div className="results-stats">
             <div className="stat">
               <span className="stat-label">Total Time:</span>
               <span className="stat-value">{results.totalTime}s</span>
             </div>
             <div className="stat">
-              <span className="stat-label">Chains Updated:</span>
-              <span className="stat-value">{results.successCount}/2</span>
+                <span className="stat-label">Chains Updated:</span>
+                <span className="stat-value">{results.successCount}/2</span>
             </div>
             <div className="stat">
               <span className="stat-label">vs Traditional Bridge:</span>

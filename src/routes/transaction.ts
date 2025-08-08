@@ -11,6 +11,7 @@ import { getNextEthereumNonce } from "../utils/ethereumNonceManager";
 import { Contract, JsonRpcProvider } from "ethers";
 import { utils } from "chainsig.js";
 const { toRSV, uint8ArrayToHex } = utils.cryptography;
+import { logInfo, logError } from "../utils/logStream";
 
 const app = new Hono();
 
@@ -28,22 +29,24 @@ app.get("/", async (c) => {
       return c.json({ error: "Failed to fetch ETH price" }, 500);
     }
 
+    logInfo(`🧮 ETH price (cents): ${ethPrice}`);
     // Get the transaction and payload to sign
     const { transaction, hashesToSign } = await getPricePayload(
       ethPrice,
       contractId,
     );
+    logInfo("🔧 Prepared Ethereum tx for signing (1 hash)");
 
     // Call the agent contract to get a signature for the payload
     const signRes = await requestSignature({
       path: "ethereum-1",
       payload: uint8ArrayToHex(hashesToSign[0]),
     });
-    console.log("signRes", signRes);
+    logInfo("✍️  Signature received from MPC");
 
     // Check if there was an error in the signature response
     if ('error' in signRes) {
-      console.error("Signature request failed:", signRes.error);
+      logError(`Signature request failed: ${String(signRes.error)}`);
       return c.json({ 
         error: "Signature request failed", 
         details: signRes.error 
@@ -58,6 +61,7 @@ app.get("/", async (c) => {
 
     // Broadcast the signed transaction
     const txHash = await Evm.broadcastTx(signedTransaction);
+    logInfo(`📡 Broadcasted Ethereum tx: ${txHash.hash}`);
 
     // Send back both the txHash and the new price optimistically
     return c.json({
@@ -65,7 +69,7 @@ app.get("/", async (c) => {
       newPrice: (ethPrice / 100).toFixed(2),
     });
   } catch (error) {
-    console.error("Failed to send the transaction:", error);
+    logError(`Failed to send the Ethereum transaction: ${error instanceof Error ? error.message : String(error)}`);
     return c.json({ error: "Failed to send the transaction" }, 500);
   }
 });

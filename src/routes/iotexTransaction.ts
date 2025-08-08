@@ -12,45 +12,46 @@ import { Evm } from "../utils/ethereum";
 import { Contract, JsonRpcProvider, ethers } from "ethers";
 import { utils } from "chainsig.js";
 const { toRSV, uint8ArrayToHex } = utils.cryptography;
+import { logInfo, logError } from "../utils/logStream";
 
 const app = new Hono();
 
 app.get("/", async (c) => {
   try {
-    console.log("🚀 Starting IoTeX transaction");
+    logInfo("🚀 Starting IoTeX transaction");
     
     const contractId = process.env.NEXT_PUBLIC_contractId;
     if (!contractId) {
-      console.log("❌ Contract ID not configured");
+      logError("❌ Contract ID not configured");
       return c.json({ error: "Contract ID not configured" }, 500);
     }
-    console.log("✅ Contract ID:", contractId);
+    logInfo(`✅ Contract ID: ${contractId}`);
 
     // Get the ETH price (reusing the same price feed)
-    console.log("📊 Fetching ETH price...");
+    logInfo("📊 Fetching ETH price...");
     const ethPrice = await getEthereumPriceUSD();
     if (!ethPrice) {
-      console.log("❌ Failed to fetch ETH price");
+      logError("❌ Failed to fetch ETH price");
       return c.json({ error: "Failed to fetch ETH price" }, 500);
     }
-    console.log("✅ ETH price:", ethPrice);
+    logInfo(`✅ ETH price: ${ethPrice}`);
 
     // Get the transaction and payload to sign using the IoTeX adapter (fixed gas)
-    console.log("🔧 Preparing transaction for signing via IoTeX adapter...");
+    logInfo("🔧 Preparing transaction for signing via IoTeX adapter...");
     const debug = c.req.query("debug") === "1";
     const { transaction, hashesToSign, senderAddress } = await getIoTeXPricePayload(
       ethPrice,
       contractId,
       debug,
     );
-    console.log("✅ Transaction prepared, hashes to sign:", hashesToSign.length);
-    console.log("🧾 Prepared tx (types):", {
+    logInfo(`✅ Transaction prepared, hashes to sign: ${hashesToSign.length}`);
+    logInfo("🧾 Prepared tx (types): " + JSON.stringify({
       gas: typeof (transaction as any)?.gas,
       gasPrice: typeof (transaction as any)?.gasPrice,
       value: typeof (transaction as any)?.value,
       nonce: typeof (transaction as any)?.nonce,
       chainId: typeof (transaction as any)?.chainId,
-    });
+    }));
 
     // Debug path: return transaction shape/types without signing/broadcasting
     if (debug) {
@@ -81,11 +82,11 @@ app.get("/", async (c) => {
       path: getIoTeXPath("testnet"),
       payload: uint8ArrayToHex(hashesToSign[0]),
     });
-    console.log("signRes", signRes);
+    logInfo("✍️  Signature received from MPC");
 
     // Check if there was an error in the signature response
     if ('error' in signRes) {
-      console.error("Signature request failed:", signRes.error);
+      logError(`Signature request failed: ${String(signRes.error)}`);
       return c.json({ 
         error: "Signature request failed", 
         details: signRes.error 
@@ -93,7 +94,7 @@ app.get("/", async (c) => {
     }
 
     // Create signed transaction manually for IoTeX
-    console.log("🔧 Serializing signed transaction (ethers)...");
+    logInfo("🔧 Serializing signed transaction (ethers)...");
     
     // Convert signature to ethers format
     const rsvSig = toRSV(signRes);
@@ -120,10 +121,10 @@ app.get("/", async (c) => {
 
     // Get the serialized signed transaction
     const signedTransaction = tx.serialized;
-    console.log("✅ Transaction signed and serialized");
+    logInfo("✅ Transaction signed and serialized");
 
     // Broadcast using viem client directly
-    console.log("📡 Broadcasting transaction to IoTeX...");
+    logInfo("📡 Broadcasting transaction to IoTeX...");
     const { createPublicClient, http } = await import("viem");
     const iotexClient = createPublicClient({
       transport: http(iotexRpcUrl),
@@ -134,11 +135,11 @@ app.get("/", async (c) => {
       const txHash = await iotexClient.sendRawTransaction({
         serializedTransaction: signedTransaction as `0x${string}`,
       });
-      console.log("✅ Transaction broadcasted to IoTeX:", txHash);
+      logInfo(`✅ Transaction broadcasted to IoTeX: ${txHash}`);
       txResult = { hash: txHash };
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
-      console.error("❌ Broadcast failed:", m);
+      logError(`❌ Broadcast failed: ${m}`);
       throw e;
     }
     const txHash = String(txResult.hash || txResult);
@@ -152,8 +153,7 @@ app.get("/", async (c) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("❌ IoTeX transaction failed at step:", message);
-    console.error("Full error:", error);
+    logError(`❌ IoTeX transaction failed at step: ${message}`);
     return c.json({ 
       error: "Failed to send the IoTeX transaction",
       details: message
