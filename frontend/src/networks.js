@@ -27,6 +27,20 @@ export const NETWORKS = {
       account: '/api/iotex-account',
       transaction: '/api/iotex-transaction'
     }
+  },
+  avalanche: {
+    id: 'avalanche',
+    name: 'Avalanche Fuji',
+    rpcUrl: 'https://api.avax-test.network/ext/bc/C/rpc',
+    contractAddress: '0x0000000000000000000000000000000000000000',
+    chainId: 43113,
+    explorerUrl: 'https://testnet.snowtrace.io',
+    faucetUrl: 'https://faucet.avax.network/',
+    currency: 'AVAX',
+    apiEndpoints: {
+      account: '/api/avalanche-account',
+      transaction: '/api/avalanche-transaction'
+    }
   }
 };
 

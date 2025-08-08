@@ -58,7 +58,7 @@ export async function getContractPrice(networkId = 'sepolia') {
 }
 
 export async function getAllContractPrices() {
-  const ids = ['sepolia','iotex'];
+  const ids = ['sepolia','iotex','avalanche'];
   const results = await Promise.all(ids.map(async id => {
     try {
       const p = await getContractPrice(id);
