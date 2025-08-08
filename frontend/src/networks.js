@@ -32,7 +32,7 @@ export const NETWORKS = {
     id: 'avalanche',
     name: 'Avalanche Fuji',
     rpcUrl: 'https://api.avax-test.network/ext/bc/C/rpc',
-    contractAddress: '0x0000000000000000000000000000000000000000',
+    contractAddress: '0xE06Afdf580021DD475cd280D4ae4BB519314a995',
     chainId: 43113,
     explorerUrl: 'https://testnet.snowtrace.io',
     faucetUrl: 'https://faucet.avax.network/',

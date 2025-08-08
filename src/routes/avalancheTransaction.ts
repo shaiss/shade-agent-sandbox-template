@@ -46,10 +46,16 @@ async function getPricePayload(ethPrice: number, contractId: string, adapter: an
   );
   const data = contract.interface.encodeFunctionData("updatePrice", [ethPrice]);
 
+  // Get pending/explicit nonce using viem client
+  const { createPublicClient, http } = await import("viem");
+  const pc = createPublicClient({ transport: http(avalancheChainConfig.testnet.rpcUrl) });
+  const nonce = await pc.getTransactionCount({ address: senderAddress as `0x${string}`, blockTag: 'pending' });
+
   const { transaction, hashesToSign } = await adapter.prepareTransactionForSigning({
     from: senderAddress,
     to: avalancheChainConfig.testnet.contractAddress,
     data,
+    nonce: Number(nonce),
   });
   return { transaction, hashesToSign };
 }

@@ -5,7 +5,7 @@ export const avalancheFujiRpcUrl = "https://api.avax-test.network/ext/bc/C/rpc";
 export const avalancheMainnetRpcUrl = "https://api.avax.network/ext/bc/C/rpc";
 
 // TODO: Update after deploying PriceOracle on Fuji/Mainnet
-export const avalancheFujiContractAddress = "0x0000000000000000000000000000000000000000";
+export const avalancheFujiContractAddress = "0xE06Afdf580021DD475cd280D4ae4BB519314a995";
 export const avalancheMainnetContractAddress = "0x0000000000000000000000000000000000000000";
 
 export const avalancheContractAbi = [
@@ -52,7 +52,7 @@ export const avalancheChainConfig = {
   testnet: {
     rpcUrl: avalancheFujiRpcUrl,
     contractAddress: avalancheFujiContractAddress,
-    path: "avalanche-1", // fallback to "ethereum-1" if not configured in MPC
+    path: "ethereum-1", // using ethereum-1 as reliable fallback for MPC path
     chainId: 43113,
     adapter: AvalancheFuji,
   },
