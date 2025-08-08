@@ -2,17 +2,15 @@ import { useState } from "react";
 import "./MultiChainDemo.css";
 
 export default function SingleChainDemo({ chainName, chainId, API_URL, onSuccess }) {
-  const [status, setStatus] = useState("idle");
+  const [status, setStatus] = useState("idle"); // idle | signing | complete | error
   const [txHash, setTxHash] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case "idle":
-        return "⏳";
-      case "loading":
-        return "🔄";
+  const getStatusIcon = (current) => {
+    switch (current) {
+      case "signing":
+        return "🔏";
       case "complete":
         return "✅";
       case "error":
@@ -22,18 +20,16 @@ export default function SingleChainDemo({ chainName, chainId, API_URL, onSuccess
     }
   };
 
-  const getStatusText = (status) => {
-    switch (status) {
-      case "idle":
-        return "Ready to sign";
-      case "loading":
-        return "Signing transaction...";
+  const getStatusText = (current) => {
+    switch (current) {
+      case "signing":
+        return "Signing with MPC...";
       case "complete":
         return "Transaction confirmed!";
       case "error":
-        return "Transaction failed";
+        return "Failed";
       default:
-        return "Ready to sign";
+        return "Ready";
     }
   };
 
@@ -47,22 +43,19 @@ export default function SingleChainDemo({ chainName, chainId, API_URL, onSuccess
   };
 
   const getExplorerName = () => {
-    if (chainId === "ethereum") {
-      return "Etherscan";
-    } else if (chainId === "iotex") {
-      return "IoTeXScan";
-    }
+    if (chainId === "ethereum") return "Etherscan";
+    if (chainId === "iotex") return "IoTeXScan";
     return "Explorer";
   };
 
   const handleSign = async () => {
     setIsLoading(true);
-    setStatus("loading");
+    setStatus("signing");
     setError(null);
     setTxHash(null);
 
     try {
-      const endpoint = chainId === "ethereum" 
+      const endpoint = chainId === "ethereum"
         ? `${API_URL}/api/transaction`
         : `${API_URL}/api/iotex-transaction`;
 
@@ -72,12 +65,16 @@ export default function SingleChainDemo({ chainName, chainId, API_URL, onSuccess
       if (response.ok && !data.error) {
         setTxHash(data.txHash);
         setStatus("complete");
+        // Persist last tx to local storage for deterministic UI
+        if (data.txHash) {
+          localStorage.setItem(`lastTx.${chainId}`, JSON.stringify({ txHash: data.txHash, at: new Date().toISOString() }));
+        }
         if (onSuccess) {
           onSuccess({
             chain: chainId,
             txHash: data.txHash,
             newPrice: data.newPrice,
-            totalTime: Date.now() - Date.now() // Single chain, so no meaningful total time
+            totalTime: 0,
           });
         }
       } else {
@@ -95,28 +92,25 @@ export default function SingleChainDemo({ chainName, chainId, API_URL, onSuccess
   };
 
   return (
-    <div className="single-chain-card">
-      <div className="chain-header">
-        <h3>{chainName}</h3>
-        <div className="status-icon">{getStatusIcon(status)}</div>
-      </div>
-      
+    <div className={`chain-status-box ${status}`}>
+      <h3>{chainName}</h3>
+      <div className="status-icon">{getStatusIcon(status)}</div>
       <p className="status-text">{getStatusText(status)}</p>
-      
+
       {txHash ? (
         <div className="tx-details">
           <p className="tx-hash">{txHash.substring(0, 10)}...</p>
-          <button 
+          <button
             className="copy-hash-btn"
             onClick={() => {
               navigator.clipboard.writeText(txHash);
-              alert('Full hash copied!');
+              alert("Full hash copied!");
             }}
             title="Copy full hash"
           >
             📋 Copy Full Hash
           </button>
-          <a 
+          <a
             href={getExplorerUrl(txHash)}
             target="_blank"
             rel="noopener noreferrer"
@@ -125,7 +119,7 @@ export default function SingleChainDemo({ chainName, chainId, API_URL, onSuccess
             🔍 View on {getExplorerName()}
           </a>
         </div>
-      ) : status === 'error' && (
+      ) : status === "error" && (
         <div className="tx-details">
           <p className="tx-error">❌ Transaction failed</p>
           <p className="tx-error-details">{error || "Check console for details"}</p>
@@ -133,7 +127,7 @@ export default function SingleChainDemo({ chainName, chainId, API_URL, onSuccess
       )}
 
       <button
-        className="single-chain-button"
+        className={`single-chain-button ${isLoading ? "executing" : ""}`}
         onClick={handleSign}
         disabled={isLoading}
       >

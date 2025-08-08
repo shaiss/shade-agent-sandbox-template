@@ -83,6 +83,9 @@ export default function MultiChainDemo({ API_URL, onSuccess }) {
       // Update statuses based on results
       if (ethResponse.status === 'fulfilled' && !ethResponse.value.error) {
         setEthStatus('complete');
+        if (ethResponse.value.txHash) {
+          localStorage.setItem('lastTx.ethereum', JSON.stringify({ txHash: ethResponse.value.txHash, at: new Date().toISOString() }));
+        }
       } else {
         setEthStatus('error');
         console.log('Ethereum transaction failed:', ethResponse.value?.error || 'Unknown error');
@@ -90,6 +93,9 @@ export default function MultiChainDemo({ API_URL, onSuccess }) {
 
       if (iotexResponse.status === 'fulfilled' && !iotexResponse.value.error) {
         setIotexStatus('complete');
+        if (iotexResponse.value.txHash) {
+          localStorage.setItem('lastTx.iotex', JSON.stringify({ txHash: iotexResponse.value.txHash, at: new Date().toISOString() }));
+        }
       } else {
         setIotexStatus('error');
         console.log('IoTeX transaction failed:', iotexResponse.value?.error || 'Unknown error');
@@ -99,19 +105,16 @@ export default function MultiChainDemo({ API_URL, onSuccess }) {
         (ethResponse.status === 'fulfilled' && !ethResponse.value.error ? 1 : 0) +
         (iotexResponse.status === 'fulfilled' && !iotexResponse.value.error ? 1 : 0);
 
-      setResults({
+      const mergedResults = {
         ethereum: ethResponse.status === 'fulfilled' ? ethResponse.value : null,
         iotex: iotexResponse.status === 'fulfilled' ? iotexResponse.value : null,
         totalTime: finalTime,
         successCount
-      });
+      };
+      setResults(mergedResults);
 
       if (onSuccess && successCount > 0) {
-        onSuccess({
-          multiChain: true,
-          results,
-          totalTime: finalTime
-        });
+        onSuccess({ multiChain: true, ...mergedResults });
       }
 
     } catch (error) {

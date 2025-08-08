@@ -1,5 +1,7 @@
 # Chain Switching Expert Guide
 
+Note: For instructions on adding support for a brand new chain, see the canonical guide at `docs/ADDING_NEW_CHAINS.md`.
+
 ## Supported Chains Overview
 
 The Shade Agent template supports **7 blockchain networks** through `chainsig.js`:

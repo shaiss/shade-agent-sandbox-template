@@ -23,6 +23,7 @@ Make your demo pop with:
 - Visual animations and effects
 - Sound effects and celebrations
 - Before/after comparisons
+- Quick implementation scripts
 
 ### 3. 📋 [Presenter Quick Reference](./PRESENTER_QUICK_REFERENCE.md)
 Your pocket companion with:
@@ -89,6 +90,9 @@ The guides include:
 - Comparison charts for bridge vs Shade Agent
 - Step-by-step flow visualizations
 - Before/after scenario illustrations
+
+### 7. 🧩 Adding a New Chain
+- See the canonical developer guide: [Adding New Chains](./ADDING_NEW_CHAINS.md)
 
 ## 🛠️ Technical Enhancements
 

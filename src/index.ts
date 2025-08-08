@@ -15,6 +15,7 @@ import transaction from "./routes/transaction";
 import iotexAccount from "./routes/iotexAccount";
 import iotexTransaction from "./routes/iotexTransaction";
 import nonceControl from "./routes/nonceControl";
+import price from "./routes/price";
 
 const app = new Hono();
 
@@ -31,6 +32,7 @@ app.route("/api/transaction", transaction);
 app.route("/api/iotex-account", iotexAccount);
 app.route("/api/iotex-transaction", iotexTransaction);
 app.route("/api/nonce-control", nonceControl);
+app.route("/api/price", price);
 
 // Start the server
 const port = Number(process.env.PORT || "3000");

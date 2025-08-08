@@ -1,45 +1,29 @@
-# Adding New Chains Expert Guide
+# Adding a New Chain — Rules (Canonical: docs/ADDING_NEW_CHAINS.md)
 
-## Chain Investigation Methodology
+This rules file is intentionally concise. The full, canonical guide for adding a new chain lives in `docs/ADDING_NEW_CHAINS.md`. Keep that document authoritative and up to date; do not duplicate its content here.
 
-### Step 1: Research Chain Characteristics
-When adding a new chain, first investigate:
+## Quick Checklist
 
-1. **Blockchain Type**: Is it EVM-compatible, Solana-based, or other?
-2. **Consensus Mechanism**: Proof of Work, Proof of Stake, etc.
-3. **Native Token**: What's the native currency?
-4. **Smart Contract Support**: Solidity, Move, Rust, etc.
-5. **RPC Endpoints**: Available RPC URLs for testnet/mainnet
-6. **Chain IDs**: Network identifiers
-7. **Block Time**: Transaction confirmation speed
-8. **Gas Model**: Fee structure and gas limits
+- Research chain characteristics and confirm adapter support in `chainsig.js`
+- Verify RPC connectivity (testnet + mainnet)
+- Create chain config in `src/utils/{chain}.ts`
+- Deploy/confirm contract address and register it
+- Implement `/{chain}-account` and `/{chain}-transaction` routes
+- Wire routes into `src/index.ts`
+- Add minimal frontend support if applicable
+- Test E2E (account, prepare, sign, finalize, broadcast)
+- Update documentation in `docs/ADDING_NEW_CHAINS.md`
 
-### Step 2: Check chainsig.js Compatibility
-```javascript
-// Test chain adapter availability
-const { chainAdapters } = require('chainsig.js');
-console.log('Available adapters:', Object.keys(chainAdapters));
+## References
 
-// Test specific adapter creation
-const adapter = new chainAdapters.evm.EVM({...});
-console.log('Adapter methods:', Object.getOwnPropertyNames(adapter.constructor.prototype));
-```
+- Canonical doc: `docs/ADDING_NEW_CHAINS.md`
+- Code patterns: see existing EVM examples (e.g., `src/utils/ethereum.ts`, `src/routes/ethAccount.ts`)
+- Path patterns: `{chain}-1` for testnet, `{chain}-mainnet` for mainnet
+- Common RPCs: prefer reliable public RPCs; keep testnets fast for demos
 
-### Step 3: Test RPC Connectivity
-```javascript
-// Test RPC endpoint connectivity
-const response = await fetch(rpcUrl, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    jsonrpc: '2.0',
-    method: 'eth_chainId',
-    params: [],
-    id: 1,
-  }),
-});
-```
+## Notes
 
+<<<<<<< Current (Your changes)
 ## Supported Chain Types
 
 ### EVM-Compatible Chains
@@ -359,3 +343,7 @@ description:
 globs:
 alwaysApply: false
 ---
+=======
+- Avoid placing detailed how-to steps here; link to `docs/ADDING_NEW_CHAINS.md` instead.
+- Keep IoTeX/Sepolia examples centralized in the docs, not duplicated in rules.
+>>>>>>> Incoming (Background Agent changes)
