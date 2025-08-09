@@ -20,16 +20,14 @@ app.get("/", async (c) => {
 
     const path = getAvalanchePath('testnet');
 
-    // Derive sender address via chainsig EVM
-    const { createPublicClient, http } = await import("viem");
-    const deriveClient = createPublicClient({ transport: http(avalancheChainConfig.testnet.rpcUrl) });
+    // Derive sender address via chainsig EVM using a reference provider
+    const referenceProvider = new JsonRpcProvider(avalancheChainConfig.testnet.rpcUrl);
     const { chainAdapters, contracts } = await import('chainsig.js');
     const mpc = new contracts.ChainSignatureContract({ networkId: 'testnet', contractId: 'v1.signer-prod.testnet' });
-    const evm = new chainAdapters.evm.EVM({ publicClient: deriveClient, contract: mpc }) as any;
+    const evm = new chainAdapters.evm.EVM({ publicClient: undefined as any, contract: mpc }) as any;
     const { address: senderAddress } = await evm.deriveAddressAndPublicKey(contractId, path);
 
     // Build call data
-    const referenceProvider = new JsonRpcProvider(avalancheChainConfig.testnet.rpcUrl);
     const contract = new Contract(
       avalancheChainConfig.testnet.contractAddress,
       avalancheContractAbi,
@@ -40,18 +38,20 @@ app.get("/", async (c) => {
     let lastError: string | null = null;
     for (const rpc of avalancheFujiRpcUrls) {
       try {
-        const pc = createPublicClient({ transport: http(rpc) });
-        const [gasPrice, nonce] = await Promise.all([
-          pc.getGasPrice(),
-          pc.getTransactionCount({ address: senderAddress as `0x${string}`, blockTag: 'pending' }),
+        const provider = new ethers.JsonRpcProvider(rpc);
+        // Get gasPrice and nonce via ethers
+        const [feeData, nonce] = await Promise.all([
+          provider.getFeeData(),
+          provider.getTransactionCount(senderAddress, 'pending'),
         ]);
+        const gasPrice = feeData.gasPrice ?? (await provider.getGasPrice());
 
         const unsignedTx = {
           to: avalancheChainConfig.testnet.contractAddress,
           value: 0n,
           data,
           gasLimit: 150000n,
-          gasPrice,
+          gasPrice: gasPrice as bigint,
           nonce: Number(nonce),
           chainId: avalancheChainConfig.testnet.chainId,
           type: 0 as const,
@@ -67,7 +67,6 @@ app.get("/", async (c) => {
         tx.signature = { r: '0x' + rsvSig.r, s: '0x' + rsvSig.s, v: rsvSig.v };
         const serialized = tx.serialized;
 
-        const provider = new ethers.JsonRpcProvider(rpc);
         const rcpt = await provider.broadcastTransaction(serialized);
         const txHash = rcpt.hash;
         logInfo(`📡 Broadcasted Avalanche tx via ${rpc}: ${txHash}`);
