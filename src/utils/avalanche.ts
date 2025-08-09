@@ -2,6 +2,12 @@ import { contracts, chainAdapters } from "chainsig.js";
 import { createPublicClient, http } from "viem";
 
 export const avalancheFujiRpcUrl = "https://api.avax-test.network/ext/bc/C/rpc";
+export const avalancheFujiRpcUrls = [
+  "https://api.avax-test.network/ext/bc/C/rpc",
+  "https://avalanche-fuji-c-chain.publicnode.com",
+  "https://endpoints.omniatech.io/v1/avalanche/fuji/public",
+  "https://rpc.ankr.com/avalanche_fuji"
+];
 export const avalancheMainnetRpcUrl = "https://api.avax.network/ext/bc/C/rpc";
 
 // TODO: Update after deploying PriceOracle on Fuji/Mainnet
