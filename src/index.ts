@@ -18,6 +18,10 @@ import nonceControl from "./routes/nonceControl";
 import solanaAccount from "./routes/solanaAccount";
 import solanaTransaction from "./routes/solanaTransaction";
 import price from "./routes/price";
+import avalancheAccount from "./routes/avalancheAccount";
+import avalancheTransaction from "./routes/avalancheTransaction";
+import avalanchePrepare from "./routes/avalanchePrepare";
+import avalancheDeploy from "./routes/avalancheDeploy";
 import { attachSSE, hookConsole, logInfo } from "./utils/logStream";
 
 // Hook console to broadcast to SSE stream
@@ -41,6 +45,10 @@ app.route("/api/nonce-control", nonceControl);
 app.route("/api/price", price);
 app.route("/api/solana-account", solanaAccount);
 app.route("/api/solana-transaction", solanaTransaction);
+app.route("/api/avalanche-account", avalancheAccount);
+app.route("/api/avalanche-transaction", avalancheTransaction);
+app.route("/api/avalanche-prepare", avalanchePrepare);
+app.route("/api/avalanche-deploy", avalancheDeploy);
 // Simple SSE endpoint for log stream
 app.get("/api/logs/stream", (c) => attachSSE(c));
 

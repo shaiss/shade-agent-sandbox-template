@@ -58,7 +58,7 @@ export async function getContractPrice(networkId = 'sepolia') {
 }
 
 export async function getAllContractPrices() {
-  const ids = ['sepolia','iotex'];
+  const ids = ['sepolia','iotex','avalanche'];
   const results = await Promise.all(ids.map(async id => {
     try {
       const p = await getContractPrice(id);
@@ -123,4 +123,16 @@ export function formatBalance(balance, decimals, decimalPlaces = 6) {
   const decimalPos = strValue.length - decimals;
   const result = strValue.slice(0, decimalPos) + "." + strValue.slice(decimalPos);
   return parseFloat(result).toFixed(decimalPlaces);
+}
+
+export async function broadcastRawTransaction(networkId, serializedTransaction) {
+  try {
+    const network = NETWORKS[networkId];
+    const provider = new JsonRpcProvider(network.rpcUrl);
+    const response = await provider.broadcastTransaction(serializedTransaction);
+    return response?.hash || null;
+  } catch (e) {
+    console.error(`Broadcast failed on ${networkId}:`, e?.message || e);
+    return null;
+  }
 }

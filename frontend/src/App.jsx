@@ -20,14 +20,16 @@ export default function Home() {
   const [ethereumBalance, setEthereumBalance] = useState("0");
   const [iotexAddress, setIotexAddress] = useState("");
   const [iotexBalance, setIotexBalance] = useState("0");
+  const [avalancheAddress, setAvalancheAddress] = useState("");
+  const [avalancheBalance, setAvalancheBalance] = useState("0");
   const [contractPrice, setContractPrice] = useState(null);
-  const [perChainPrices, setPerChainPrices] = useState({ sepolia: null, iotex: null });
+  const [perChainPrices, setPerChainPrices] = useState({ sepolia: null, iotex: null, avalanche: null });
   const [marketPrice, setMarketPrice] = useState(null);
   const [marketUpdatedAt, setMarketUpdatedAt] = useState(null);
   const [marketRefreshIn, setMarketRefreshIn] = useState(30);
-  const [lastUpdateInfo, setLastUpdateInfo] = useState({ sepolia: null, iotex: null });
+  const [lastUpdateInfo, setLastUpdateInfo] = useState({ sepolia: null, iotex: null, avalanche: null });
   const [error, setError] = useState("");
-  const [isSigning, setIsSigning] = useState({ ethereum: false, iotex: false });
+  const [isSigning, setIsSigning] = useState({ ethereum: false, iotex: false, avalanche: false });
   const [selectedChains, setSelectedChains] = useState([]); // ['ethereum','iotex']
   const [isBatchExecuting, setIsBatchExecuting] = useState(false);
   const [nonceIncrementEnabled, setNonceIncrementEnabled] = useState(true);
@@ -53,28 +55,33 @@ export default function Home() {
 
   const refreshOnchain = async () => {
     const all = await getAllContractPrices();
-    const mapped = {
-      sepolia: all.sepolia != null ? (all.sepolia / 100).toFixed(2) : null,
-      iotex: all.iotex != null ? (all.iotex / 100).toFixed(2) : null,
-    };
+          const mapped = {
+        sepolia: all.sepolia != null ? (all.sepolia / 100).toFixed(2) : null,
+        iotex: all.iotex != null ? (all.iotex / 100).toFixed(2) : null,
+        avalanche: all.avalanche != null ? (all.avalanche / 100).toFixed(2) : null,
+      };
     setPerChainPrices(mapped);
-    const [ethInfo, iotexInfo] = await Promise.all([
+    const [ethInfo, iotexInfo, avaInfo] = await Promise.all([
       getLastUpdateInfo('sepolia'),
-      getLastUpdateInfo('iotex')
+      getLastUpdateInfo('iotex'),
+      getLastUpdateInfo('avalanche'),
     ]);
 
     const lastLocalEth = (() => { try { return JSON.parse(localStorage.getItem('lastTx.ethereum') || 'null'); } catch { return null; }})();
     const lastLocalIotex = (() => { try { return JSON.parse(localStorage.getItem('lastTx.iotex') || 'null'); } catch { return null; }})();
+    const lastLocalAvalanche = (() => { try { return JSON.parse(localStorage.getItem('lastTx.avalanche') || 'null'); } catch { return null; }})();
 
-    const [ethTs, iotexTs] = await Promise.all([
+    const [ethTs, iotexTs, avaTs] = await Promise.all([
       (!ethInfo && lastLocalEth?.txHash) ? getTimestampFromTxHash('sepolia', lastLocalEth.txHash) : null,
       (!iotexInfo && lastLocalIotex?.txHash) ? getTimestampFromTxHash('iotex', lastLocalIotex.txHash) : null,
+      (!avaInfo && lastLocalAvalanche?.txHash) ? getTimestampFromTxHash('avalanche', lastLocalAvalanche.txHash) : null,
     ]);
 
     const finalEth = ethInfo || (lastLocalEth?.txHash && ethTs ? { txHash: lastLocalEth.txHash, timestamp: ethTs } : null);
     const finalIotex = iotexInfo || (lastLocalIotex?.txHash && iotexTs ? { txHash: lastLocalIotex.txHash, timestamp: iotexTs } : null);
+    const finalAvalanche = avaInfo || (lastLocalAvalanche?.txHash && avaTs ? { txHash: lastLocalAvalanche.txHash, timestamp: avaTs } : null);
 
-    setLastUpdateInfo({ sepolia: finalEth, iotex: finalIotex });
+    setLastUpdateInfo({ sepolia: finalEth, iotex: finalIotex, avalanche: finalAvalanche });
   };
 
   const getPrice = async () => {
@@ -146,13 +153,13 @@ export default function Home() {
 
   const handleSingleChainSuccess = async (data) => {
     await Promise.all([getMarketPrice(), refreshOnchain()]);
-    const chainName = data.chain === 'ethereum' ? 'Ethereum Sepolia' : 'IoTeX Testnet';
+    const chainName = data.chain === 'ethereum' ? 'Ethereum Sepolia' : (data.chain === 'iotex' ? 'IoTeX Testnet' : 'Avalanche Fuji');
     const successMsg = `✅ ${chainName} transaction successful!\n💰 New price: $${data.newPrice}\n🔗 Hash: ${data.txHash?.substring(0, 10)}...`;
     setMessageHide(successMsg, 3000, true);
   };
 
   const pollForOnchainUpdate = async (chain, expectedPriceDisplay) => {
-    const networkId = chain === 'ethereum' ? 'sepolia' : 'iotex';
+    const networkId = chain === 'ethereum' ? 'sepolia' : (chain === 'iotex' ? 'iotex' : 'avalanche');
     const expectedFixed = expectedPriceDisplay != null ? Number(expectedPriceDisplay).toFixed(2) : null;
     for (let i = 0; i < 15; i++) { // ~22.5s total with 1.5s delay
       try {
@@ -171,18 +178,33 @@ export default function Home() {
   const signOnChain = async (chain) => {
     setIsSigning((prev) => ({ ...prev, [chain]: true }));
     try {
-      const endpoint = chain === 'ethereum' ? `${API_URL}/api/transaction` : `${API_URL}/api/iotex-transaction`;
+      const endpoint = chain === 'ethereum'
+        ? `${API_URL}/api/transaction`
+        : (chain === 'iotex' ? `${API_URL}/api/iotex-transaction` : `${API_URL}/api/avalanche-transaction`);
+      if (chain === 'avalanche') {
+        // Try prepare mode and client-side broadcast to avoid server POST restrictions
+        const prepRes = await fetch(`${API_URL}/api/avalanche-transaction?mode=prepare`);
+        const prep = await prepRes.json();
+        if (prepRes.ok && prep?.serializedTransaction) {
+          const { broadcastRawTransaction } = await import('./ethereum');
+          const txHash = await broadcastRawTransaction('avalanche', prep.serializedTransaction);
+          if (txHash) {
+            try { localStorage.setItem('lastTx.avalanche', JSON.stringify({ txHash, at: new Date().toISOString() })); } catch {}
+            pollForOnchainUpdate('avalanche', prep.newPrice);
+            await handleSingleChainSuccess({ chain: 'avalanche', txHash, newPrice: prep.newPrice });
+            return;
+          }
+        }
+        // Fallback to server broadcast if prepare path failed
+      }
       const response = await fetch(endpoint);
       const data = await response.json();
       if (response.ok && !data.error) {
-        // Persist last tx for fallback resolution
         try {
           localStorage.setItem(`lastTx.${chain}`, JSON.stringify({ txHash: data.txHash, at: new Date().toISOString() }));
         } catch {}
-
-        // Optimistically resolve timestamp directly from tx
         try {
-          const networkId = chain === 'ethereum' ? 'sepolia' : 'iotex';
+          const networkId = chain === 'ethereum' ? 'sepolia' : (chain === 'iotex' ? 'iotex' : 'avalanche');
           if (data.txHash) {
             const ts = await getTimestampFromTxHash(networkId, data.txHash);
             if (ts) {
@@ -198,8 +220,6 @@ export default function Home() {
             }
           }
         } catch {}
-
-        // Start polling for on-chain confirmation to reflect updated price/timestamp
         pollForOnchainUpdate(chain, data.newPrice);
         await handleSingleChainSuccess({ chain, ...data, totalTime: 0 });
       } else {
@@ -248,6 +268,7 @@ export default function Home() {
 
   const lastLocalEth = (() => { try { return JSON.parse(localStorage.getItem('lastTx.ethereum') || 'null'); } catch { return null; }})();
   const lastLocalIotex = (() => { try { return JSON.parse(localStorage.getItem('lastTx.iotex') || 'null'); } catch { return null; }})();
+  const lastLocalAvalanche = (() => { try { return JSON.parse(localStorage.getItem('lastTx.avalanche') || 'null'); } catch { return null; }})();
 
   const updateSelectedChains = async () => {
     if (selectedChains.length < 2) return; // require at least 2 as per UX
@@ -256,7 +277,7 @@ export default function Home() {
     setIsSigning((prev) => selectedChains.reduce((acc, ch) => ({ ...acc, [ch]: true }), { ...prev }));
     try {
       const requests = selectedChains.map((ch) =>
-        fetch(ch === 'ethereum' ? `${API_URL}/api/transaction` : `${API_URL}/api/iotex-transaction`).then(async (r) => {
+                 fetch(ch === 'ethereum' ? `${API_URL}/api/transaction` : (ch === 'iotex' ? `${API_URL}/api/iotex-transaction` : `${API_URL}/api/avalanche-transaction`)).then(async (r) => {
           const data = await r.json();
           return r.ok && !data.error ? { chain: ch, data } : { chain: ch, error: data.error || 'Transaction failed' };
         })
@@ -385,6 +406,46 @@ export default function Home() {
                 title="Sign and update price on IoTeX"
               >
                 {isSigning.iotex ? <span className="spin" aria-hidden>↻</span> : '🔑'}
+              </button>
+            </div>
+          </div>
+
+          <div className="card card-with-action selectable">
+            <div className="card-header-row">
+              <h3>🧾 Contract Price — Avalanche (Fuji)</h3>
+              <label className="select-checkbox" title="Select chain for batch update">
+                <input
+                  type="checkbox"
+                  checked={selectedChains.includes('avalanche')}
+                  onChange={() => toggleChainSelected('avalanche')}
+                />
+              </label>
+            </div>
+            <div className="card-body-with-action">
+              <div className="card-left">
+                <p style={{fontSize:'2rem', margin:0}}>{perChainPrices.avalanche ? `$${perChainPrices.avalanche}` : '—'}</p>
+                <p style={{opacity:.8, marginTop:8}}>Value stored on-chain</p>
+                <p style={{color:'var(--text-secondary)', fontSize:'0.85rem', marginTop:8}}>
+                  {lastUpdateInfo.avalanche?.timestamp ? (
+                    <>
+                      Last updated: {new Date(lastUpdateInfo.avalanche.timestamp).toLocaleTimeString()} · <a href={`https://testnet.snowtrace.io/tx/${lastUpdateInfo.avalanche.txHash}`} target="_blank" rel="noopener noreferrer">view tx</a>
+                    </>
+                  ) : lastLocalAvalanche?.txHash ? (
+                    <>
+                      Last updated: resolving… · <a href={`https://testnet.snowtrace.io/tx/${lastLocalAvalanche.txHash}`} target="_blank" rel="noopener noreferrer">view tx</a>
+                    </>
+                  ) : (
+                    <>Last updated: —</>
+                  )}
+                </p>
+              </div>
+              <button
+                className={`action-btn big ${isSigning.avalanche ? 'loading' : ''}`}
+                onClick={() => signOnChain('avalanche')}
+                disabled={isSigning.avalanche}
+                title="Sign and update price on Avalanche"
+              >
+                {isSigning.avalanche ? <span className="spin" aria-hidden>↻</span> : '🔑'}
               </button>
             </div>
           </div>

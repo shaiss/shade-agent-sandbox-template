@@ -1,8 +1,8 @@
 {
   "_format": "hh-sol-cache-2",
   "files": {
-    "/Users/Shai.Perednik/Documents/code_workspace/shade-agent-template/contracts/PriceOracle.sol": {
-      "lastModificationDate": 1754589067494,
+    "/workspace/contracts/PriceOracle.sol": {
+      "lastModificationDate": 1754492173675,
       "contentHash": "d5f166fdfea69c50180e168eb69f39cb",
       "sourceName": "contracts/PriceOracle.sol",
       "solcConfig": {
