@@ -181,17 +181,30 @@ export default function Home() {
       const endpoint = chain === 'ethereum'
         ? `${API_URL}/api/transaction`
         : (chain === 'iotex' ? `${API_URL}/api/iotex-transaction` : `${API_URL}/api/avalanche-transaction`);
+      if (chain === 'avalanche') {
+        // Try prepare mode and client-side broadcast to avoid server POST restrictions
+        const prepRes = await fetch(`${API_URL}/api/avalanche-transaction?mode=prepare`);
+        const prep = await prepRes.json();
+        if (prepRes.ok && prep?.serializedTransaction) {
+          const { broadcastRawTransaction } = await import('./ethereum');
+          const txHash = await broadcastRawTransaction('avalanche', prep.serializedTransaction);
+          if (txHash) {
+            try { localStorage.setItem('lastTx.avalanche', JSON.stringify({ txHash, at: new Date().toISOString() })); } catch {}
+            pollForOnchainUpdate('avalanche', prep.newPrice);
+            await handleSingleChainSuccess({ chain: 'avalanche', txHash, newPrice: prep.newPrice });
+            return;
+          }
+        }
+        // Fallback to server broadcast if prepare path failed
+      }
       const response = await fetch(endpoint);
       const data = await response.json();
       if (response.ok && !data.error) {
-        // Persist last tx for fallback resolution
         try {
           localStorage.setItem(`lastTx.${chain}`, JSON.stringify({ txHash: data.txHash, at: new Date().toISOString() }));
         } catch {}
-
-        // Optimistically resolve timestamp directly from tx
         try {
-                     const networkId = chain === 'ethereum' ? 'sepolia' : (chain === 'iotex' ? 'iotex' : 'avalanche');
+          const networkId = chain === 'ethereum' ? 'sepolia' : (chain === 'iotex' ? 'iotex' : 'avalanche');
           if (data.txHash) {
             const ts = await getTimestampFromTxHash(networkId, data.txHash);
             if (ts) {
@@ -207,8 +220,6 @@ export default function Home() {
             }
           }
         } catch {}
-
-        // Start polling for on-chain confirmation to reflect updated price/timestamp
         pollForOnchainUpdate(chain, data.newPrice);
         await handleSingleChainSuccess({ chain, ...data, totalTime: 0 });
       } else {

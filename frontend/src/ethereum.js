@@ -124,3 +124,15 @@ export function formatBalance(balance, decimals, decimalPlaces = 6) {
   const result = strValue.slice(0, decimalPos) + "." + strValue.slice(decimalPos);
   return parseFloat(result).toFixed(decimalPlaces);
 }
+
+export async function broadcastRawTransaction(networkId, serializedTransaction) {
+  try {
+    const network = NETWORKS[networkId];
+    const provider = new JsonRpcProvider(network.rpcUrl);
+    const response = await provider.broadcastTransaction(serializedTransaction);
+    return response?.hash || null;
+  } catch (e) {
+    console.error(`Broadcast failed on ${networkId}:`, e?.message || e);
+    return null;
+  }
+}
