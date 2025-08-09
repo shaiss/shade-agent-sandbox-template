@@ -1,0 +1,73 @@
+---
+description: TEE LLM integration (Options A+B+C). Implement AI Insight, Decision Gate, and Attestation badge using a GPU TEE-hosted LLM (private-ml-sdk). Applies to backend routes and frontend UI edits.
+alwaysApply: false
+---
+# TEE LLM (Options A+B+C) — Implementation Guardrails
+
+References: [Phala GPU TEE guide](mdc:https://docs.phala.network/phala-cloud/gpu/confidential-ai/gpu-tee/llm-in-tee.md), [private-ml-sdk](mdc:https://github.com/nearai/private-ml-sdk)
+
+## Service contract (TEE LLM microservice)
+- Host vLLM in GPU TEE using private-ml-sdk (OpenAI-compatible). Expose:
+  - POST `/v1/chat/completions` (OpenAI schema)
+  - GET `/attest` → returns a TDX quote (JSON)
+- Environment for our app:
+  - `LLM_TEE_URL` (e.g., http://shade-llm:8080)
+  - `LLM_MODEL_ID` (e.g., `meta-llama/llama-3.3-70b-instruct`)
+  - `LLM_TOKENS_MAX` (e.g., 256)
+  - `LLM_TIMEOUT_MS` (e.g., 4000)
+
+## Backend changes (src/)
+1) Create `src/utils/llmClient.ts` with:
+   - `getInsight(input: { marketPriceUSD: number; sepoliaPriceCents?: number | null; iotexPriceCents?: number | null; }): Promise<{ insight: string }>`
+   - `getDecision(input: { marketPriceUSD: number; lastPriceCents?: number | null; previousPriceCents?: number | null; }): Promise<{ approve: boolean; reason: string }>`
+   - `getAttestation(): Promise<{ quote: string }>`
+   - Notes:
+     - POST to `${LLM_TEE_URL}/v1/chat/completions` with a compact system+user prompt; limit tokens (`LLM_TOKENS_MAX`), low temperature.
+     - GET `${LLM_TEE_URL}/attest` for TDX quote.
+     - Set per-request timeout `LLM_TIMEOUT_MS`. On timeout, return safe defaults (`insight: null`, `approve: true`).
+
+2) Enhance price route `src/routes/price.ts`:
+   - After getting `priceCents`, call `llmClient.getInsight(...)`.
+   - Include `{ aiInsight }` in JSON output. Do not block on failure.
+
+3) New decision route `src/routes/decision.ts`:
+   - `POST /api/decision` body `{ marketPriceUSD, lastOnchainPriceCents? }`.
+   - Calls `llmClient.getDecision(...)` and returns `{ approve, reason }`.
+   - Validate inputs; 4xx on bad body; 5xx only on unexpected errors.
+
+4) New attest route `src/routes/attest.ts`:
+   - `GET /api/attest` → proxies `llmClient.getAttestation()`; returns `{ quote }`.
+
+5) Wire routes in `src/index.ts`:
+   - `app.route("/api/decision", decision)` and `app.route("/api/attest", attest)`.
+
+## Frontend changes (frontend/src/)
+1) Add AI Insight card in `App.jsx` near Market Price:
+   - Show `aiInsight` from `/api/price` response.
+   - Add a small “TEE verified” icon if `/api/attest` succeeded at least once.
+
+2) Decision Gate before sign:
+   - In `signOnChain(chain)`, first `POST /api/decision` with current market price and last on-chain price.
+   - If `{ approve: false }`, show toast with `reason` and abort; else continue with existing tx flow.
+
+3) UX/timeouts:
+   - Do not block UI on LLM; show skeleton or fallback text (`—`).
+   - Respect short timeouts; retries only on idempotent reads.
+
+## Prompts (concise and deterministic)
+- Insight (system): “You are a concise market explainer. Output one sentence, max 25 words.”
+- Insight (user): “ETH market: ${marketPriceUSD}. On-chain Sepolia: ${sepolia}, IoTeX: ${iotex}. Give a brief explanation and potential action.”
+- Decision (system): “Respond JSON with keys approve (boolean) and reason (<=20 words). Be conservative on insignificant deltas (<0.3%).”
+- Decision (user): “Market: ${marketPriceUSD}. Last on-chain (cents): ${lastPriceCents}. Approve pushing update now?”
+
+## Security & Ops
+- Keep `LLM_TEE_URL` private (backend-only). No frontend exposure.
+- Sanitize inputs; cap tokens; set temperature low (0.2–0.4).
+- Log only high-level events to SSE; never log secrets or full prompts.
+- Optional: cache `aiInsight` for 15–30s to reduce load.
+
+## Demo checklist
+- Price card shows “AI Insight (TEE)” with fresh text.
+- Click “Sign” → Decision gate can block with a clear reason.
+- “TEE Verified” badge visible after `/api/attest` succeeds.
+

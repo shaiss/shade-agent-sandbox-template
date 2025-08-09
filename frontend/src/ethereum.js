@@ -75,7 +75,29 @@ export async function getLastUpdateInfo(networkId = 'sepolia') {
     const { provider, contract } = getNetworkContract(networkId);
     const filter = contract.filters.PriceUpdated();
     const latest = await provider.getBlockNumber();
-    // Keep ranges conservative to avoid RPC 400s on public providers
+    
+    // Try different strategies to find the latest event
+    // Strategy 1: Check very recent blocks first (for fresh transactions)
+    try {
+      const recentWindow = 50; // Check last 50 blocks first
+      const recentFrom = Math.max(0, latest - recentWindow);
+      const logs = await contract.queryFilter(filter, recentFrom, latest);
+      if (logs && logs.length) {
+        const last = logs[logs.length - 1];
+        const block = await provider.getBlock(last.blockNumber);
+        const price = last.args?.newPrice ?? last.args?.[0] ?? null;
+        return {
+          txHash: last.transactionHash,
+          blockNumber: Number(last.blockNumber),
+          timestamp: block?.timestamp ? new Date(block.timestamp * 1000).toISOString() : null,
+          price: price !== null ? Number(price) : null,
+        };
+      }
+    } catch (e) {
+      // If recent check fails, continue with larger windows
+    }
+    
+    // Strategy 2: Use larger windows for older events
     const window = networkId === 'sepolia' ? 5000 : 20000;
     let to = latest;
     for (let attempts = 0; attempts < 12 && to >= 0; attempts++) {

@@ -1,0 +1,5 @@
+2025-08-09 12:02:07.406 | INFO     | awslabs.aws_support_mcp_server.server:main:704 | 8572887232:4293 | {'diagnostics': True} - AWS Support MCP Server starting up. Log file: /Users/Shai.Perednik/Documents/code_workspace/shade-agent-template/logs/mcp_support_server.log
+2025-08-09 12:02:07.406 | INFO     | awslabs.aws_support_mcp_server.server:main:706 | 8572887232:4293 | {'diagnostics': True} - Debug mode: True
+2025-08-09 12:02:07.406 | DEBUG    | awslabs.aws_support_mcp_server.server:main:710 | 8572887232:4293 | {'diagnostics': True} - Enabling detailed performance tracking and error monitoring
+2025-08-09 12:02:07.406 | DEBUG    | awslabs.aws_support_mcp_server.server:main:715 | 8572887232:4293 | {'diagnostics': True} - Starting awslabs_support_mcp_server MCP server
+2025-08-09 12:02:07.407 | INFO     | awslabs.aws_support_mcp_server.server:main:718 | 8572887232:4293 | {'diagnostics': True} - Starting AWS Support MCP Server with stdio transport

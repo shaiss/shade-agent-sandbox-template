@@ -123,26 +123,31 @@ app.get("/", async (c) => {
     const signedTransaction = tx.serialized;
     logInfo("✅ Transaction signed and serialized");
 
-    // Broadcast using viem client directly
+    // Broadcast transaction (try ethers first, then viem as fallback)
     logInfo("📡 Broadcasting transaction to IoTeX...");
-    const { createPublicClient, http } = await import("viem");
-    const iotexClient = createPublicClient({
-      transport: http(iotexRpcUrl),
-    });
-
-    let txResult;
+    let txHash: string;
     try {
-      const txHash = await iotexClient.sendRawTransaction({
-        serializedTransaction: signedTransaction as `0x${string}`,
-      });
-      logInfo(`✅ Transaction broadcasted to IoTeX: ${txHash}`);
-      txResult = { hash: txHash };
-    } catch (e) {
-      const m = e instanceof Error ? e.message : String(e);
-      logError(`❌ Broadcast failed: ${m}`);
-      throw e;
+      const provider = new JsonRpcProvider(iotexRpcUrl);
+      const resp = await provider.broadcastTransaction(signedTransaction);
+      txHash = String((resp as any)?.hash || resp);
+      logInfo(`✅ Transaction broadcasted to IoTeX (ethers): ${txHash}`);
+    } catch (e1) {
+      const m1 = e1 instanceof Error ? e1.message : String(e1);
+      logError(`❌ Ethers broadcast failed, retrying with viem: ${m1}`);
+      try {
+        const { createPublicClient, http } = await import("viem");
+        const iotexClient = createPublicClient({ transport: http(iotexRpcUrl) });
+        const rawHash = await iotexClient.sendRawTransaction({
+          serializedTransaction: signedTransaction as `0x${string}`,
+        });
+        txHash = String(rawHash);
+        logInfo(`✅ Transaction broadcasted to IoTeX (viem): ${txHash}`);
+      } catch (e2) {
+        const m2 = e2 instanceof Error ? e2.message : String(e2);
+        logError(`❌ Viem broadcast failed: ${m2}`);
+        throw e2;
+      }
     }
-    const txHash = String(txResult.hash || txResult);
     const blockNumber = null; // Block number not immediately available from sendRawTransaction
 
     return c.json({

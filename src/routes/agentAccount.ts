@@ -5,16 +5,21 @@ const app = new Hono();
 
 app.get("/", async (c) => {
   try {
-    // Get the agents account Id
-    const accountId = await agentAccountId();
+    // Get the agent's NEAR account id
+    const accountIdResponse = await agentAccountId();
+    const accountId =
+      typeof accountIdResponse === "string"
+        ? accountIdResponse
+        : (accountIdResponse as any)?.accountId || (accountIdResponse as any)?.id || "";
 
     // Get the balance of the agent account
-    const balance = await agent("getBalance");
+    const balanceResponse = await agent("getBalance");
+    const balance =
+      typeof balanceResponse === "object" && balanceResponse && "balance" in (balanceResponse as any)
+        ? (balanceResponse as any).balance
+        : (balanceResponse as any);
 
-    return c.json({
-      accountId: accountId.accountId,
-      balance: balance.balance,
-    });
+    return c.json({ accountId, balance });
   } catch (error) {
     console.log("Error getting agent account:", error);
     return c.json({ error: "Failed to get agent account " + error }, 500);

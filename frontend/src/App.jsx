@@ -151,20 +151,65 @@ export default function Home() {
     setMessageHide(successMsg, 3000, true);
   };
 
-  const pollForOnchainUpdate = async (chain, expectedPriceDisplay) => {
+  const pollForOnchainUpdate = async (chain, expectedPriceDisplay, txHash) => {
     const networkId = chain === 'ethereum' ? 'sepolia' : 'iotex';
     const expectedFixed = expectedPriceDisplay != null ? Number(expectedPriceDisplay).toFixed(2) : null;
-    for (let i = 0; i < 15; i++) { // ~22.5s total with 1.5s delay
+    
+    // First, wait a bit for the transaction to be mined
+    await sleep(3000);
+    
+    let consecutiveErrors = 0;
+    const maxConsecutiveErrors = 3;
+    
+    for (let i = 0; i < 30; i++) { // Increased to ~60s total with 2s delay
       try {
+        // First try to get the transaction receipt to ensure it's mined
+        if (txHash && i < 10) {
+          const ts = await getTimestampFromTxHash(networkId, txHash);
+          if (!ts) {
+            // Transaction not mined yet, wait and continue
+            await sleep(2000);
+            continue;
+          }
+        }
+        
         // Refresh just the targeted chain first to minimize RPC load
         const info = await getLastUpdateInfo(networkId);
-        setLastUpdateInfo((prev) => ({ ...prev, [networkId]: info }));
+        
         if (info?.price != null) {
-          setPerChainPrices((prev) => ({ ...prev, [networkId]: (info.price / 100).toFixed(2) }));
+          // Check if this is a newer update than what we have
+          const currentInfo = lastUpdateInfo[networkId];
+          const isNewer = !currentInfo || 
+            (info.blockNumber > (currentInfo.blockNumber || 0)) ||
+            (info.timestamp && currentInfo.timestamp && new Date(info.timestamp) > new Date(currentInfo.timestamp));
+          
+          if (isNewer) {
+            setLastUpdateInfo((prev) => ({ ...prev, [networkId]: info }));
+            setPerChainPrices((prev) => ({ ...prev, [networkId]: (info.price / 100).toFixed(2) }));
+            
+            // If we found the expected price, we're done
+            if (!expectedFixed || (info.price / 100).toFixed(2) === expectedFixed) {
+              console.log(`✅ Found on-chain update for ${chain}: $${(info.price / 100).toFixed(2)}`);
+              break;
+            }
+          }
         }
-        if (!expectedFixed || (info?.price != null && (info.price / 100).toFixed(2) === expectedFixed)) break;
-      } catch (e) {}
-      await sleep(1500);
+        
+        // Reset error counter on successful request
+        consecutiveErrors = 0;
+      } catch (e) {
+        console.log(`Error polling ${chain}:`, e?.message || e);
+        consecutiveErrors++;
+        
+        // If too many consecutive errors, wait longer before retrying
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          console.log(`Too many errors polling ${chain}, waiting 5s before retry...`);
+          await sleep(5000);
+          consecutiveErrors = 0;
+        }
+      }
+      
+      await sleep(2000);
     }
   };
 
@@ -200,7 +245,7 @@ export default function Home() {
         } catch {}
 
         // Start polling for on-chain confirmation to reflect updated price/timestamp
-        pollForOnchainUpdate(chain, data.newPrice);
+        pollForOnchainUpdate(chain, data.newPrice, data.txHash);
         await handleSingleChainSuccess({ chain, ...data, totalTime: 0 });
       } else {
         setMessageHide(data.error || 'Transaction failed', 3000, false);
@@ -269,7 +314,7 @@ export default function Home() {
           const ch = r.value.chain;
           const d = r.value.data;
           try { localStorage.setItem(`lastTx.${ch}`, JSON.stringify({ txHash: d.txHash, at: new Date().toISOString() })); } catch {}
-          pollForOnchainUpdate(ch, d.newPrice);
+          pollForOnchainUpdate(ch, d.newPrice, d.txHash);
           await handleSingleChainSuccess({ chain: ch, ...d });
         } else if (r.status === 'fulfilled') {
           setMessageHide(`${r.value.chain} error: ${r.value.error}`, 2500, false);
@@ -413,18 +458,29 @@ export default function Home() {
         <div className="grid">
           <div className="card">
             <h3>Fund Agent Account</h3>
-            <p>
+            <div>
               <br />
-              {agentAddress?.length >= 24
-                ? `${agentAddress.substring(0, 10)}...${agentAddress.substring(agentAddress.length - 4)}`
-                : agentAddress}
-              <br />
-              <button className="btn" onClick={() => { try { navigator.clipboard.writeText(agentAddress); setMessageHide("Copied", 500, true);} catch(e){} }}>copy</button>
-              <br /><br />
-              balance: {agentBalance || '0'}
-              <br />
-              <a href="https://near-faucet.io/" target="_blank" rel="noopener noreferrer" className="faucet-link">Get Testnet NEAR tokens from faucet →</a>
-            </p>
+              {agentAddress ? (
+                <p>
+                  {agentAddress.length >= 24
+                    ? `${agentAddress.substring(0, 10)}...${agentAddress.substring(agentAddress.length - 4)}`
+                    : agentAddress}
+                  <br />
+                  <button
+                    className="btn"
+                    onClick={() => { try { navigator.clipboard.writeText(agentAddress); setMessageHide("Copied", 500, true);} catch(e){} }}
+                  >
+                    copy
+                  </button>
+                  <br /><br />
+                  balance: {agentBalance || '0'}
+                  <br />
+                  <a href="https://near-faucet.io/" target="_blank" rel="noopener noreferrer" className="faucet-link">Get Testnet NEAR tokens from faucet →</a>
+                </p>
+              ) : (
+                <p>Loading...</p>
+              )}
+            </div>
           </div>
 
           <div className="card">
