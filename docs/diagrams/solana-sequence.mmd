@@ -1,0 +1,17 @@
+sequenceDiagram
+  participant FE as Frontend
+  participant API as /api/solana-transaction
+  participant Price as fetch-eth-price
+  participant SOL as Solana adapter
+  participant MPC as Shade Agent (NEAR MPC)
+  participant SRPC as Solana RPC
+
+  FE->>API: GET /api/solana-transaction
+  API->>Price: Get ETH price
+  API->>SOL: deriveAddress(contractId,"solana-1")
+  API->>API: build TransactionInstruction(priceAccount, u64_le(price))
+  API->>MPC: requestSignature(messageBytes)
+  MPC-->>API: ed25519 signature
+  API->>SRPC: sendRawTransaction
+  SRPC-->>API: txHash
+  API-->>FE: { txHash, newPrice }
