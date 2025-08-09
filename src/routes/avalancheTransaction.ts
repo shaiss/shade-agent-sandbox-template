@@ -19,6 +19,7 @@ app.get("/", async (c) => {
     logInfo(`🧮 ETH price (cents): ${ethPrice}`);
 
     const path = getAvalanchePath('testnet');
+    const mode = c.req.query("mode"); // "prepare" or default broadcast
 
     // Derive sender address via chainsig EVM using a reference provider
     const referenceProvider = new JsonRpcProvider(avalancheChainConfig.testnet.rpcUrl);
@@ -66,6 +67,22 @@ app.get("/", async (c) => {
         const rsvSig = toRSV(signRes);
         tx.signature = { r: '0x' + rsvSig.r, s: '0x' + rsvSig.s, v: rsvSig.v };
         const serialized = tx.serialized;
+
+        if (mode === 'prepare') {
+          // Return serialized tx without broadcasting
+          return c.json({
+            mode: 'prepare',
+            serializedTransaction: serialized,
+            rpc,
+            from: senderAddress,
+            to: avalancheChainConfig.testnet.contractAddress,
+            gasPrice: String(gasPrice),
+            gasLimit: String(unsignedTx.gasLimit),
+            nonce: unsignedTx.nonce,
+            chainId: unsignedTx.chainId,
+            newPrice: (ethPrice / 100).toFixed(2),
+          });
+        }
 
         const rcpt = await provider.broadcastTransaction(serialized);
         const txHash = rcpt.hash;
