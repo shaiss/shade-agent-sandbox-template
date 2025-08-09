@@ -3,10 +3,9 @@ import { createPublicClient, http } from "viem";
 
 export const avalancheFujiRpcUrl = "https://api.avax-test.network/ext/bc/C/rpc";
 export const avalancheFujiRpcUrls = [
-  "https://api.avax-test.network/ext/bc/C/rpc",
   "https://avalanche-fuji-c-chain.publicnode.com",
-  "https://endpoints.omniatech.io/v1/avalanche/fuji/public",
-  "https://rpc.ankr.com/avalanche_fuji"
+  "https://api.avax-test.network/ext/bc/C/rpc",
+  "https://endpoints.omniatech.io/v1/avalanche/fuji/public"
 ];
 export const avalancheMainnetRpcUrl = "https://api.avax.network/ext/bc/C/rpc";
 
